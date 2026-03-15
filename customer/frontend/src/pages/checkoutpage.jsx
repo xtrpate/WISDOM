@@ -44,7 +44,20 @@ const PAYMENT_METHODS = [
 
 export default function CheckoutPage() {
   const { user } = useAuth();
-  const { cart, cartCount, clearCart } = useCart();
+  const { cart, removeItem, clearCart } = useCart();
+
+  /* Read selected keys saved by CartPage — fall back to full cart */
+  const selectedKeys = (() => {
+    try {
+      const saved = sessionStorage.getItem("cust_selected_keys");
+      return saved ? new Set(JSON.parse(saved)) : null;
+    } catch {
+      return null;
+    }
+  })();
+  const checkoutCart = selectedKeys
+    ? cart.filter((i) => selectedKeys.has(i.key))
+    : cart;
   const navigate = useNavigate();
   const fileRef = useRef(null);
 
@@ -66,7 +79,7 @@ export default function CheckoutPage() {
 
   /* Redirect to cart if empty */
   useEffect(() => {
-    if (!cart || cart.length === 0) navigate("/cart");
+    if (!checkoutCart || checkoutCart.length === 0) navigate("/cart");
   }, []);
 
   /* Load payment settings */
@@ -90,8 +103,11 @@ export default function CheckoutPage() {
 
   const set = (k, v) => setForm((p) => ({ ...p, [k]: v }));
 
-  const subtotal = cart.reduce((s, i) => s + i.unit_price * i.quantity, 0);
-  const itemCount = cart.reduce((s, i) => s + i.quantity, 0);
+  const subtotal = checkoutCart.reduce(
+    (s, i) => s + i.unit_price * i.quantity,
+    0,
+  );
+  const itemCount = checkoutCart.reduce((s, i) => s + i.quantity, 0);
 
   const selectedMethod = PAYMENT_METHODS.find(
     (m) => m.value === form.payment_method,
@@ -124,7 +140,7 @@ export default function CheckoutPage() {
     setLoading(true);
     try {
       const formData = new FormData();
-      formData.append("items", JSON.stringify(cart));
+      formData.append("items", JSON.stringify(checkoutCart));
       formData.append("name", form.name);
       formData.append("phone", form.phone);
       formData.append("delivery_address", form.delivery_address);
@@ -138,8 +154,13 @@ export default function CheckoutPage() {
         headers: { "Content-Type": "multipart/form-data" },
       });
 
-      /* Clear cart via context */
-      clearCart();
+      /* Remove only checked-out items, leave rest in cart */
+      if (selectedKeys) {
+        checkoutCart.forEach((item) => removeItem(item.key));
+        sessionStorage.removeItem("cust_selected_keys");
+      } else {
+        clearCart();
+      }
       setSuccess(res.data);
     } catch (err) {
       setError(
@@ -252,6 +273,93 @@ export default function CheckoutPage() {
         {/* ── Left: form ── */}
         <div className="checkout-form-panel">
           {error && <div className="alert alert-error">{error}</div>}
+
+          {/* Section 0: Order Items Review */}
+          <div className="checkout-section">
+            <div className="checkout-section-header">
+              <div
+                className="checkout-section-num"
+                style={{
+                  background: "linear-gradient(135deg,#1a1a2e,#2d1b0e)",
+                }}
+              >
+                📦
+              </div>
+              <h3>Items to Order</h3>
+              <span style={{ marginLeft: "auto", fontSize: 12, color: "#aaa" }}>
+                {checkoutCart.length} item{checkoutCart.length !== 1 ? "s" : ""}
+              </span>
+            </div>
+            <div className="checkout-items-preview">
+              {checkoutCart.map((item) => (
+                <div key={item.key} className="checkout-item-row">
+                  {/* Image */}
+                  <div className="checkout-item-thumb">
+                    {item.image_url ? (
+                      <img
+                        src={`http://localhost:5000/${item.image_url}`}
+                        alt={item.product_name}
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "cover",
+                          borderRadius: 8,
+                        }}
+                        onError={(e) => {
+                          e.target.style.display = "none";
+                          e.target.nextSibling.style.display = "flex";
+                        }}
+                      />
+                    ) : null}
+                    <div
+                      style={{
+                        display: item.image_url ? "none" : "flex",
+                        width: "100%",
+                        height: "100%",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: 22,
+                      }}
+                    >
+                      {item.item_type === "blueprint" ? "📐" : "🪵"}
+                    </div>
+                  </div>
+                  {/* Info */}
+                  <div className="checkout-item-details">
+                    <div className="checkout-item-name">
+                      {item.product_name}
+                    </div>
+                    {item.wood_type && (
+                      <div className="checkout-item-sub">{item.wood_type}</div>
+                    )}
+                    {item.item_type === "blueprint" && (
+                      <div
+                        className="checkout-item-sub"
+                        style={{ color: "#8B4513" }}
+                      >
+                        📐 Blueprint Order
+                      </div>
+                    )}
+                    <div className="checkout-item-sub">
+                      {parseFloat(item.unit_price) > 0
+                        ? `₱${parseFloat(item.unit_price).toLocaleString("en-PH", { minimumFractionDigits: 2 })} each`
+                        : "Price to be quoted"}
+                    </div>
+                  </div>
+                  {/* Qty */}
+                  <div className="checkout-item-qty">×{item.quantity}</div>
+                  {/* Subtotal */}
+                  <div className="checkout-item-price">
+                    {parseFloat(item.unit_price) > 0 ? (
+                      `₱${(item.unit_price * item.quantity).toLocaleString("en-PH", { minimumFractionDigits: 2 })}`
+                    ) : (
+                      <span style={{ fontSize: 12, color: "#aaa" }}>TBD</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
 
           {/* Section 1: Delivery Info */}
           <div className="checkout-section">
@@ -449,7 +557,7 @@ export default function CheckoutPage() {
           </div>
 
           <div className="checkout-summary-items">
-            {cart.map((item) => (
+            {checkoutCart.map((item) => (
               <div key={item.key} className="checkout-summary-item">
                 <div>
                   <div className="checkout-summary-item-name">

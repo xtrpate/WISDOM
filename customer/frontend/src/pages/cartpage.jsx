@@ -1,7 +1,9 @@
 /**
  * pages/cartpage.jsx
  * Uses CartContext — cart state is shared across all pages
+ * Checkbox selection: only checked items proceed to checkout
  */
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ShoppingCart,
@@ -16,8 +18,52 @@ import "./cart.css";
 
 export default function CartPage() {
   const navigate = useNavigate();
-  const { cart, cartCount, cartTotal, updateQty, removeItem, clearCart } =
-    useCart();
+  const { cart, updateQty, removeItem, clearCart } = useCart();
+
+  /* ── Selected keys — all checked by default ── */
+  const [selected, setSelected] = useState(new Set());
+
+  /* Sync selected when cart changes — new items auto-checked, removed items dropped */
+  useEffect(() => {
+    setSelected((prev) => {
+      const cartKeys = new Set(cart.map((i) => i.key));
+      const next = new Set([...prev].filter((k) => cartKeys.has(k)));
+      cart.forEach((i) => {
+        if (!prev.has(i.key)) next.add(i.key);
+      });
+      return next;
+    });
+  }, [cart]);
+
+  /* ── Checkbox handlers ── */
+  const toggleItem = (key) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  };
+
+  const allChecked = cart.length > 0 && selected.size === cart.length;
+  const toggleAll = () => {
+    if (allChecked) setSelected(new Set());
+    else setSelected(new Set(cart.map((i) => i.key)));
+  };
+
+  /* ── Computed totals from selected only ── */
+  const selectedItems = cart.filter((i) => selected.has(i.key));
+  const subtotal = selectedItems.reduce(
+    (s, i) => s + i.unit_price * i.quantity,
+    0,
+  );
+  const itemCount = selectedItems.reduce((s, i) => s + i.quantity, 0);
+
+  /* ── Proceed: save selected keys, checkout will filter from full cart ── */
+  const handleCheckout = () => {
+    if (selectedItems.length === 0) return;
+    sessionStorage.setItem("cust_selected_keys", JSON.stringify([...selected]));
+    navigate("/checkout");
+  };
 
   return (
     <div>
@@ -58,84 +104,133 @@ export default function CartPage() {
               </h2>
               <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
                 <span>
-                  {cartCount} item{cartCount !== 1 ? "s" : ""}
+                  {cart.length} item{cart.length !== 1 ? "s" : ""}
                 </span>
                 <button className="cart-clear-btn" onClick={clearCart}>
                   Clear all
                 </button>
               </div>
             </div>
+            {/* Select All row — below header */}
+            <div className="cart-select-all-row">
+              <label className="cart-select-all-label">
+                <input
+                  type="checkbox"
+                  checked={allChecked}
+                  onChange={toggleAll}
+                />
+                <span>Select All</span>
+              </label>
+            </div>
 
-            {cart.map((item) => (
-              <div key={item.key} className="cart-item-row">
-                {/* Image */}
-                <div className="cart-item-img">
-                  {item.image_url ? (
-                    <img
-                      src={`http://localhost:5000/${item.image_url}`}
-                      alt={item.product_name}
-                      style={{
-                        width: "100%",
-                        height: "100%",
-                        objectFit: "cover",
-                        borderRadius: 8,
-                      }}
-                      onError={(e) => {
-                        e.target.style.display = "none";
-                        e.target.nextSibling.style.display = "block";
-                      }}
-                    />
-                  ) : null}
-                  <span style={{ display: item.image_url ? "none" : "block" }}>
-                    🪵
-                  </span>
-                </div>
-
-                <div className="cart-item-info">
-                  <div className="cart-item-name">{item.product_name}</div>
-                  <div className="cart-item-unit-price">
-                    ₱
-                    {parseFloat(item.unit_price).toLocaleString("en-PH", {
-                      minimumFractionDigits: 2,
-                    })}{" "}
-                    each
-                  </div>
-                </div>
-
-                {/* Qty controls */}
-                <div className="cart-item-controls">
-                  <button
-                    className="cart-qty-btn"
-                    onClick={() => updateQty(item.key, -1)}
-                  >
-                    <Minus size={13} />
-                  </button>
-                  <span className="cart-qty-val">{item.quantity}</span>
-                  <button
-                    className="cart-qty-btn"
-                    onClick={() => updateQty(item.key, 1)}
-                  >
-                    <Plus size={13} />
-                  </button>
-                </div>
-
-                {/* Subtotal */}
-                <div className="cart-item-subtotal">
-                  ₱
-                  {(item.unit_price * item.quantity).toLocaleString("en-PH", {
-                    minimumFractionDigits: 2,
-                  })}
-                </div>
-
-                {/* Remove */}
-                <button
-                  className="cart-item-remove"
-                  onClick={() => removeItem(item.key)}
+            {cart.map((item) => {
+              const isChecked = selected.has(item.key);
+              return (
+                <div
+                  key={item.key}
+                  className={`cart-item-row ${isChecked ? "cart-item-selected" : "cart-item-dimmed"}`}
                 >
-                  <Trash2 size={16} />
-                </button>
+                  {/* Checkbox */}
+                  <input
+                    type="checkbox"
+                    className="cart-item-checkbox"
+                    checked={isChecked}
+                    onChange={() => toggleItem(item.key)}
+                  />
+
+                  {/* Image — grayscale only if out of stock */}
+                  <div className="cart-item-img">
+                    {item.image_url ? (
+                      <img
+                        src={`http://localhost:5000/${item.image_url}`}
+                        alt={item.product_name}
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "cover",
+                          borderRadius: 8,
+                          filter:
+                            item.stock_status === "out_of_stock"
+                              ? "grayscale(100%)"
+                              : "none",
+                        }}
+                        onError={(e) => {
+                          e.target.style.display = "none";
+                          e.target.nextSibling.style.display = "block";
+                        }}
+                      />
+                    ) : null}
+                    <span
+                      style={{ display: item.image_url ? "none" : "block" }}
+                    >
+                      {item.item_type === "blueprint" ? "📐" : "🪵"}
+                    </span>
+                  </div>
+
+                  <div className="cart-item-info">
+                    <div className="cart-item-name">{item.product_name}</div>
+                    {item.wood_type && (
+                      <div className="cart-item-meta">{item.wood_type}</div>
+                    )}
+                    {item.item_type === "blueprint" && (
+                      <div
+                        className="cart-item-meta"
+                        style={{ color: "#8B4513" }}
+                      >
+                        📐 Blueprint Order
+                      </div>
+                    )}
+                    <div className="cart-item-unit-price">
+                      {parseFloat(item.unit_price) > 0
+                        ? `₱${parseFloat(item.unit_price).toLocaleString("en-PH", { minimumFractionDigits: 2 })} each`
+                        : "Price to be quoted"}
+                    </div>
+                  </div>
+
+                  {/* Qty controls */}
+                  <div className="cart-item-controls">
+                    <button
+                      className="cart-qty-btn"
+                      onClick={() => updateQty(item.key, -1)}
+                    >
+                      <Minus size={13} />
+                    </button>
+                    <span className="cart-qty-val">{item.quantity}</span>
+                    <button
+                      className="cart-qty-btn"
+                      onClick={() => updateQty(item.key, 1)}
+                    >
+                      <Plus size={13} />
+                    </button>
+                  </div>
+
+                  {/* Subtotal */}
+                  <div className="cart-item-subtotal">
+                    {parseFloat(item.unit_price) > 0 ? (
+                      `₱${(item.unit_price * item.quantity).toLocaleString("en-PH", { minimumFractionDigits: 2 })}`
+                    ) : (
+                      <span style={{ fontSize: 12, color: "#aaa" }}>TBD</span>
+                    )}
+                  </div>
+
+                  {/* Remove */}
+                  <button
+                    className="cart-item-remove"
+                    onClick={() => removeItem(item.key)}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              );
+            })}
+
+            {/* Partial selection footer */}
+            {selected.size > 0 && selected.size < cart.length && (
+              <div className="cart-selection-bar">
+                {selected.size} of {cart.length} item
+                {cart.length !== 1 ? "s" : ""} selected for checkout
               </div>
-            ))}
+            )}
           </div>
 
           {/* ── Right: summary ── */}
@@ -145,10 +240,12 @@ export default function CartPage() {
             </div>
             <div className="summary-body">
               <div className="summary-row">
-                <span>Subtotal ({cartCount} items)</span>
+                <span>
+                  Selected ({itemCount} item{itemCount !== 1 ? "s" : ""})
+                </span>
                 <span>
                   ₱
-                  {cartTotal.toLocaleString("en-PH", {
+                  {subtotal.toLocaleString("en-PH", {
                     minimumFractionDigits: 2,
                   })}
                 </span>
@@ -166,7 +263,7 @@ export default function CartPage() {
                 <span>Total</span>
                 <span>
                   ₱
-                  {cartTotal.toLocaleString("en-PH", {
+                  {subtotal.toLocaleString("en-PH", {
                     minimumFractionDigits: 2,
                   })}
                 </span>
@@ -177,9 +274,16 @@ export default function CartPage() {
                 checkout.
               </p>
 
+              {selected.size === 0 && (
+                <p className="cart-no-selection-note">
+                  ☝️ Select at least one item to proceed
+                </p>
+              )}
+
               <button
                 className="checkout-btn"
-                onClick={() => navigate("/checkout")}
+                onClick={handleCheckout}
+                disabled={selected.size === 0}
               >
                 Proceed to Checkout <ArrowRight size={16} />
               </button>

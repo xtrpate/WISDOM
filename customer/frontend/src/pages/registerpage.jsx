@@ -562,7 +562,7 @@ export default function RegisterPage() {
             </div>
 
             <button type="submit" className="btn-auth" disabled={loading}>
-              {loading ? "Creating account…" : "Create Account & Verify Email"}
+              {loading ? "Creating account…" : "Create Account"}
             </button>
           </form>
 

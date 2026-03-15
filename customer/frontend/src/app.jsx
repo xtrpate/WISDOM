@@ -13,6 +13,7 @@ import CheckoutPage from "./pages/checkoutpage";
 import ProfileSettings from "./pages/profilesettings";
 import OrdersPage from "./pages/orderspage";
 import AppointmentPage from "./pages/appointmentpage";
+import WarrantyPage from "./pages/warrantypage";
 
 const ProtectedRoute = ({ children }) => {
   const { user, loading } = useAuth();
@@ -76,10 +77,7 @@ function App() {
               <Route path="checkout" element={<CheckoutPage />} />
               <Route path="settings" element={<ProfileSettings />} />
               <Route path="orders" element={<OrdersPage />} />
-              <Route
-                path="warranty"
-                element={<ComingSoon title="Warranty" />}
-              />
+              <Route path="warranty" element={<WarrantyPage />} />
               <Route path="faq" element={<ComingSoon title="FAQ" />} />
             </Route>
             <Route path="*" element={<Navigate to="/login" replace />} />
