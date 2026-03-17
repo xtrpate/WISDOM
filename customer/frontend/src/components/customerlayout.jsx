@@ -6,6 +6,7 @@ import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/authcontext";
 import {
   Home,
+  Scissors,
   ShoppingBag,
   FileText,
   ShoppingCart,
@@ -25,6 +26,7 @@ const navItems = [
   { to: "/home", icon: Home, label: "Home" },
   { to: "/catalog", icon: ShoppingBag, label: "Products" },
   { to: "/appointment", icon: FileText, label: "Appointment" },
+  { to: "/customize", icon: Scissors, label: "Customize" },
   { to: "/cart", icon: ShoppingCart, label: "Cart" },
   { to: "/orders", icon: Package, label: "My Orders" },
   { to: "/warranty", icon: Shield, label: "Warranty" },
@@ -58,6 +60,17 @@ export default function CustomerLayout() {
     try {
       const cart = JSON.parse(sessionStorage.getItem("cust_cart") || "[]");
       return cart.reduce((s, i) => s + i.quantity, 0);
+    } catch {
+      return 0;
+    }
+  })();
+
+  const customCartCount = (() => {
+    try {
+      const cart = JSON.parse(
+        sessionStorage.getItem("cust_custom_cart") || "[]",
+      );
+      return cart.length;
     } catch {
       return 0;
     }
@@ -111,6 +124,12 @@ export default function CustomerLayout() {
                     }}
                   >
                     {cartCount}
+                  </span>
+                )}
+                {/* Custom cart badge */}
+                {item.to === "/customize" && customCartCount > 0 && (
+                  <span className="nav-custom-cart-badge">
+                    {customCartCount}
                   </span>
                 )}
               </NavLink>

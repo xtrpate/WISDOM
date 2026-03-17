@@ -21,8 +21,12 @@ app.use(
   "/api/customer/appointments",
   require("./routes/customer.appointments"),
 );
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 app.use("/api/customer/warranty", require("./routes/customer.warranty"));
+app.use(
+  "/api/customer/custom-orders",
+  require("./routes/customer.customorders"),
+);
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // POS-specific routes — ORDER MATTERS: specific paths before general /api/pos
 app.use("/api/pos/dashboard", require("./routes/pos.dashboard")); // GET /api/pos/dashboard
