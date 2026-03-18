@@ -1,26 +1,66 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import axios from 'axios';
-import { Search, Barcode, ShoppingCart, Plus, Minus, Trash2, ArrowRight } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
-import './ProductSearch.css';
+import { useState, useEffect, useCallback, useRef } from "react";
+import axios from "axios";
+import {
+  Search,
+  Barcode,
+  ShoppingCart,
+  Plus,
+  Minus,
+  Trash2,
+  ArrowRight,
+} from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import "./ProductSearch.css";
 
 export default function ProductSearch() {
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState("");
   const [products, setProducts] = useState([]);
   const [cart, setCart] = useState([]);
   const [searching, setSearching] = useState(false);
   const navigate = useNavigate();
   const barcodeRef = useRef(null);
 
-  const searchProducts = useCallback(async (q) => {
-    if (!q.trim()) { setProducts([]); return; }
-    setSearching(true);
-    try {
-      const res = await axios.get(`/api/pos/products?q=${encodeURIComponent(q)}`);
-      setProducts(res.data);
-    } catch { setProducts([]); }
-    setSearching(false);
+  // Setup Axios interceptor to attach the login token
+  const axiosInstance = axios.create();
+  axiosInstance.interceptors.request.use((config) => {
+    const token = localStorage.getItem("token");
+    if (token) config.headers.Authorization = `Bearer ${token}`;
+    return config;
+  });
+
+  // Load existing cart from memory if user clicks "Back" from the checkout page
+  useEffect(() => {
+    const saved = sessionStorage.getItem("pos_cart");
+    if (saved) setCart(JSON.parse(saved));
   }, []);
+
+  // Save cart to memory automatically whenever it changes
+  useEffect(() => {
+    if (cart.length > 0) {
+      sessionStorage.setItem("pos_cart", JSON.stringify(cart));
+    }
+  }, [cart]);
+
+  const searchProducts = useCallback(
+    async (q) => {
+      if (!q.trim()) {
+        setProducts([]);
+        return;
+      }
+      setSearching(true);
+      try {
+        // Use axiosInstance to send the token
+        const res = await axiosInstance.get(
+          `/api/pos/products?q=${encodeURIComponent(q)}`,
+        );
+        setProducts(res.data);
+      } catch {
+        setProducts([]);
+      }
+      setSearching(false);
+    },
+    [axiosInstance],
+  );
 
   useEffect(() => {
     const t = setTimeout(() => searchProducts(query), 350);
@@ -29,43 +69,54 @@ export default function ProductSearch() {
 
   const addToCart = (product, variation = null) => {
     const key = variation ? `${product.id}-${variation.id}` : `${product.id}`;
-    setCart(prev => {
-      const existing = prev.find(i => i.key === key);
+    setCart((prev) => {
+      const existing = prev.find((i) => i.key === key);
       if (existing) {
-        return prev.map(i => i.key === key ? { ...i, quantity: i.quantity + 1 } : i);
+        return prev.map((i) =>
+          i.key === key ? { ...i, quantity: i.quantity + 1 } : i,
+        );
       }
-      return [...prev, {
-        key,
-        product_id: product.id,
-        variation_id: variation?.id || null,
-        product_name: variation
-          ? `${product.name} (${variation.variation_name})`
-          : product.name,
-        unit_price: variation?.selling_price || product.walkin_price,
-        production_cost: variation?.unit_cost ?? product.production_cost ?? 0,
-        quantity: 1,
-        max_stock: variation?.stock || product.stock
-      }];
+      return [
+        ...prev,
+        {
+          key,
+          product_id: product.id,
+          variation_id: variation?.id || null,
+          product_name: variation
+            ? `${product.name} (${variation.variation_name})`
+            : product.name,
+          // Use the calculated product.price fallback we added in the backend
+          unit_price: variation?.selling_price || product.price,
+          production_cost: variation?.unit_cost ?? product.production_cost ?? 0,
+          quantity: 1,
+          max_stock: variation?.stock || product.stock,
+        },
+      ];
     });
   };
 
   const updateQty = (key, delta) => {
-    setCart(prev => prev.map(i => {
-      if (i.key !== key) return i;
-      const newQty = i.quantity + delta;
-      if (newQty <= 0) return null;
-      if (newQty > i.max_stock) return i;
-      return { ...i, quantity: newQty };
-    }).filter(Boolean));
+    setCart((prev) =>
+      prev
+        .map((i) => {
+          if (i.key !== key) return i;
+          const newQty = i.quantity + delta;
+          if (newQty <= 0) return null;
+          if (newQty > i.max_stock) return i;
+          return { ...i, quantity: newQty };
+        })
+        .filter(Boolean),
+    );
   };
 
-  const removeItem = (key) => setCart(prev => prev.filter(i => i.key !== key));
+  const removeItem = (key) =>
+    setCart((prev) => prev.filter((i) => i.key !== key));
 
   const cartTotal = cart.reduce((s, i) => s + i.unit_price * i.quantity, 0);
 
   const proceedToCheckout = () => {
-    sessionStorage.setItem('pos_cart', JSON.stringify(cart));
-    navigate('/order');
+    sessionStorage.setItem("pos_cart", JSON.stringify(cart));
+    navigate("/order");
   };
 
   return (
@@ -83,7 +134,7 @@ export default function ProductSearch() {
             type="text"
             placeholder="Search products by name..."
             value={query}
-            onChange={e => setQuery(e.target.value)}
+            onChange={(e) => setQuery(e.target.value)}
             autoFocus
           />
         </div>
@@ -93,27 +144,45 @@ export default function ProductSearch() {
           {!searching && query && products.length === 0 && (
             <p className="search-hint">No products found for "{query}"</p>
           )}
-          {!query && <p className="search-hint">Type a product name to search, or scan a barcode above.</p>}
+          {!query && (
+            <p className="search-hint">
+              Type a product name to search, or scan a barcode above.
+            </p>
+          )}
 
           <div className="product-grid">
-            {products.map(product => (
+            {products.map((product) => (
               <div key={product.id} className="product-card">
-                {product.image_url
-                  ? <img src={product.image_url} alt={product.name} className="product-img" />
-                  : <div className="product-img-placeholder">📦</div>
-                }
+                {product.image_url ? (
+                  <img
+                    src={product.image_url}
+                    alt={product.name}
+                    className="product-img"
+                  />
+                ) : (
+                  <div className="product-img-placeholder">📦</div>
+                )}
                 <div className="product-info">
                   <div className="product-name">{product.name}</div>
                   <div className="product-category">{product.category}</div>
-                  <div className="product-price">₱{parseFloat(product.walkin_price).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</div>
-                  <div className={`badge ${product.stock_status === 'in_stock' ? 'badge-green' : product.stock_status === 'low_stock' ? 'badge-yellow' : 'badge-red'}`} style={{ fontSize: 11 }}>
-                    {product.stock_status.replace('_', ' ')} ({product.stock})
+                  {/* Fixed price display to use the fallback */}
+                  <div className="product-price">
+                    ₱
+                    {parseFloat(product.price).toLocaleString("en-PH", {
+                      minimumFractionDigits: 2,
+                    })}
+                  </div>
+                  <div
+                    className={`badge ${product.stock_status === "in_stock" ? "badge-green" : product.stock_status === "low_stock" ? "badge-yellow" : "badge-red"}`}
+                    style={{ fontSize: 11 }}
+                  >
+                    {product.stock_status.replace("_", " ")} ({product.stock})
                   </div>
                 </div>
 
                 {product.variations && product.variations.length > 0 ? (
                   <div className="variation-list">
-                    {product.variations.map(v => (
+                    {product.variations.map((v) => (
                       <button
                         key={v.id}
                         className="var-btn"
@@ -121,7 +190,9 @@ export default function ProductSearch() {
                         disabled={v.stock <= 0}
                       >
                         <span>{v.variation_name}</span>
-                        <span>₱{parseFloat(v.selling_price).toLocaleString()}</span>
+                        <span>
+                          ₱{parseFloat(v.selling_price).toLocaleString()}
+                        </span>
                       </button>
                     ))}
                   </div>
@@ -147,39 +218,62 @@ export default function ProductSearch() {
           <span>Cart ({cart.length} items)</span>
         </div>
 
-        {cart.length === 0
-          ? <div className="cart-empty">Cart is empty.<br />Search and add products.</div>
-          : <>
-              <div className="cart-items">
-                {cart.map(item => (
-                  <div key={item.key} className="cart-item">
-                    <div className="cart-item-name">{item.product_name}</div>
-                    <div className="cart-item-price">
-                      ₱{(item.unit_price * item.quantity).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
-                    </div>
-                    <div className="cart-item-controls">
-                      <button onClick={() => updateQty(item.key, -1)}><Minus size={13} /></button>
-                      <span>{item.quantity}</span>
-                      <button onClick={() => updateQty(item.key, 1)}><Plus size={13} /></button>
-                      <button className="remove-btn" onClick={() => removeItem(item.key)}>
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
+        {cart.length === 0 ? (
+          <div className="cart-empty">
+            Cart is empty.
+            <br />
+            Search and add products.
+          </div>
+        ) : (
+          <>
+            <div className="cart-items">
+              {cart.map((item) => (
+                <div key={item.key} className="cart-item">
+                  <div className="cart-item-name">{item.product_name}</div>
+                  <div className="cart-item-price">
+                    ₱
+                    {(item.unit_price * item.quantity).toLocaleString("en-PH", {
+                      minimumFractionDigits: 2,
+                    })}
                   </div>
-                ))}
-              </div>
-
-              <div className="cart-summary">
-                <div className="cart-total">
-                  <span>Total</span>
-                  <span>₱{cartTotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+                  <div className="cart-item-controls">
+                    <button onClick={() => updateQty(item.key, -1)}>
+                      <Minus size={13} />
+                    </button>
+                    <span>{item.quantity}</span>
+                    <button onClick={() => updateQty(item.key, 1)}>
+                      <Plus size={13} />
+                    </button>
+                    <button
+                      className="remove-btn"
+                      onClick={() => removeItem(item.key)}
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
                 </div>
-                <button className="btn btn-primary checkout-btn" onClick={proceedToCheckout}>
-                  Proceed to Checkout <ArrowRight size={16} />
-                </button>
+              ))}
+            </div>
+
+            <div className="cart-summary">
+              <div className="cart-total">
+                <span>Total</span>
+                <span>
+                  ₱
+                  {cartTotal.toLocaleString("en-PH", {
+                    minimumFractionDigits: 2,
+                  })}
+                </span>
               </div>
-            </>
-        }
+              <button
+                className="btn btn-primary checkout-btn"
+                onClick={proceedToCheckout}
+              >
+                Proceed to Checkout <ArrowRight size={16} />
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

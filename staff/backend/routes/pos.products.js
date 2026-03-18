@@ -1,13 +1,13 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const db = require('../db');
-const { authenticate, requireStaffOrAdmin } = require('../middleware/auth');
+const db = require("../db");
+const { authenticate, requireStaffOrAdmin } = require("../middleware/auth");
 
 // ─── GET /api/pos/products/all ─────────────────────────────────
 // IMPORTANT: /all MUST be defined BEFORE / to prevent Express from
 // matching '/' first and treating 'all' as a query parameter.
 // All products for inventory view (read-only, no stock filter)
-router.get('/all', authenticate, requireStaffOrAdmin, async (req, res) => {
+router.get("/all", authenticate, requireStaffOrAdmin, async (req, res) => {
   try {
     const [rows] = await db.execute(`
       SELECT p.id, p.barcode, p.name, p.walkin_price, p.stock,
@@ -19,7 +19,7 @@ router.get('/all', authenticate, requireStaffOrAdmin, async (req, res) => {
     res.json(rows);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ message: "Server error" });
   }
 });
 
@@ -28,7 +28,7 @@ router.get('/all', authenticate, requireStaffOrAdmin, async (req, res) => {
 // Shows ALL products (including out-of-stock) so staff can inform
 // customers — the Add to Cart button is disabled for out-of-stock.
 // production_cost is included so order_items.profit_margin is correct.
-router.get('/', authenticate, requireStaffOrAdmin, async (req, res) => {
+router.get("/", authenticate, requireStaffOrAdmin, async (req, res) => {
   const { q, barcode } = req.query;
   try {
     let query = `
@@ -42,27 +42,33 @@ router.get('/', authenticate, requireStaffOrAdmin, async (req, res) => {
     const params = [];
 
     if (barcode) {
-      query += ' AND p.barcode = ?';
+      query += " AND p.barcode = ?";
       params.push(barcode);
     } else if (q) {
-      query += ' AND (p.name LIKE ? OR p.barcode LIKE ?)';
+      query += " AND (p.name LIKE ? OR p.barcode LIKE ?)";
       params.push(`%${q}%`, `%${q}%`);
     } else {
       // No query provided — return empty to avoid loading entire catalogue
       return res.json([]);
     }
 
-    query += ' ORDER BY p.name LIMIT 50';
+    query += " ORDER BY p.name LIMIT 50";
 
     const [rows] = await db.execute(query, params);
 
-    // Fetch variations for each product (include unit_cost for profit tracking)
+    // Fetch variations for each product and calculate the correct POS price
     for (const product of rows) {
+      // ADDED: Automatically figure out the price (Fallback to online_price if walkin_price is 0)
+      product.price =
+        parseFloat(product.walkin_price) > 0
+          ? parseFloat(product.walkin_price)
+          : parseFloat(product.online_price);
+
       const [vars] = await db.execute(
         `SELECT id, variation_type, variation_value, variation_name,
                 selling_price, unit_cost, stock
          FROM product_variations WHERE product_id = ?`,
-        [product.id]
+        [product.id],
       );
       product.variations = vars;
     }
@@ -70,7 +76,7 @@ router.get('/', authenticate, requireStaffOrAdmin, async (req, res) => {
     res.json(rows);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ message: "Server error" });
   }
 });
 

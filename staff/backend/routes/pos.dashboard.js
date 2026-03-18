@@ -1,19 +1,18 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const db = require('../db');
-const { authenticate, requireStaffOrAdmin } = require('../middleware/auth');
+const db = require("../db");
+const { authenticate, requireStaffOrAdmin } = require("../middleware/auth");
 
 // GET /api/pos/dashboard  (mounted at /api/pos/dashboard → this handles GET /)
-router.get('/', authenticate, requireStaffOrAdmin, async (req, res) => {
+router.get("/", authenticate, requireStaffOrAdmin, async (req, res) => {
   try {
-    // Today's sales & order count (walkin only)
+    // Today's sales & order count (ALL orders, walkin + online)
     const [salesToday] = await db.execute(`
       SELECT 
         COUNT(*) AS order_count,
         COALESCE(SUM(total), 0) AS total_sales
       FROM orders
-      WHERE type = 'walkin'
-        AND DATE(created_at) = CURDATE()
+      WHERE DATE(created_at) = CURDATE()
         AND status NOT IN ('cancelled')
     `);
 
@@ -21,8 +20,7 @@ router.get('/', authenticate, requireStaffOrAdmin, async (req, res) => {
     const [salesWeek] = await db.execute(`
       SELECT COALESCE(SUM(total), 0) AS weekly_sales
       FROM orders
-      WHERE type = 'walkin'
-        AND YEARWEEK(created_at, 1) = YEARWEEK(NOW(), 1)
+      WHERE YEARWEEK(created_at, 1) = YEARWEEK(NOW(), 1)
         AND status NOT IN ('cancelled')
     `);
 
@@ -30,18 +28,20 @@ router.get('/', authenticate, requireStaffOrAdmin, async (req, res) => {
     const [salesMonth] = await db.execute(`
       SELECT COALESCE(SUM(total), 0) AS monthly_sales
       FROM orders
-      WHERE type = 'walkin'
-        AND MONTH(created_at) = MONTH(NOW())
+      WHERE MONTH(created_at) = MONTH(NOW())
         AND YEAR(created_at) = YEAR(NOW())
         AND status NOT IN ('cancelled')
     `);
 
     // Recent orders today
+    // We use LEFT JOIN to get the user's name if it's an online order, otherwise use the walkin name
     const [recentOrders] = await db.execute(`
-      SELECT o.id, o.order_number, o.walkin_customer_name, o.total,
-             o.payment_method, o.status, o.created_at
+      SELECT o.id, o.order_number, 
+             COALESCE(o.walkin_customer_name, u.name, 'Customer') as walkin_customer_name, 
+             o.total, o.payment_method, o.status, o.created_at
       FROM orders o
-      WHERE o.type = 'walkin' AND DATE(o.created_at) = CURDATE()
+      LEFT JOIN users u ON o.customer_id = u.id
+      WHERE DATE(o.created_at) = CURDATE()
       ORDER BY o.created_at DESC
       LIMIT 10
     `);
@@ -52,14 +52,14 @@ router.get('/', authenticate, requireStaffOrAdmin, async (req, res) => {
              SUM(oi.subtotal) AS revenue
       FROM order_items oi
       JOIN orders o ON o.id = oi.order_id
-      WHERE o.type = 'walkin' AND DATE(o.created_at) = CURDATE()
+      WHERE DATE(o.created_at) = CURDATE()
         AND o.status NOT IN ('cancelled')
       GROUP BY oi.product_name
       ORDER BY qty_sold DESC
       LIMIT 5
     `);
 
-    // Low stock alerts — ALL low/out products (not just featured)
+    // Low stock alerts — ALL low/out products
     const [lowStock] = await db.execute(`
       SELECT id, name, stock, reorder_point, stock_status
       FROM products
@@ -74,11 +74,11 @@ router.get('/', authenticate, requireStaffOrAdmin, async (req, res) => {
       monthly_sales: salesMonth[0].monthly_sales,
       recent_orders: recentOrders,
       top_products: topProducts,
-      low_stock_alerts: lowStock
+      low_stock_alerts: lowStock,
     });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Server error' });
+    console.error("[POS Dashboard Error]:", err);
+    res.status(500).json({ message: "Server error" });
   }
 });
 
