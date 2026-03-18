@@ -33,6 +33,7 @@ app.use("/api/pos/dashboard", require("./routes/pos.dashboard")); // GET /api/po
 app.use("/api/pos/products", require("./routes/pos.products")); // GET /api/pos/products, /api/pos/products/all
 app.use("/api/pos/orders", require("./routes/pos.orders")); // POST/GET /api/pos/orders
 app.use("/api/pos/blueprints", require("./routes/pos.blueprints")); // GET /api/pos/blueprints
+app.use("/api/pos/tasks", require("./routes/pos.tasks")); // GET/POST/PUT /api/pos/tasks  <-- NEW TASKS ROUTE
 
 // These handle /api/pos/deliveries, /api/pos/appointments, /api/pos/receipts, /api/pos/reports
 app.use("/api/pos", require("./routes/pos.schedule"));

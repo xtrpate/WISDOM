@@ -1,16 +1,17 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider, useAuth } from './context/AuthContext';
-import LoginPage from './pages/LoginPage';
-import POSLayout from './components/POSLayout';
-import Dashboard from './pages/Dashboard';
-import ProductSearch from './pages/ProductSearch';
-import ProcessOrder from './pages/ProcessOrder';
-import DeliveryScheduling from './pages/DeliveryScheduling';
-import AppointmentScheduling from './pages/AppointmentScheduling';
-import ReceiptPage from './pages/ReceiptPage';
-import SalesReports from './pages/SalesReports';
-import BlueprintView from './pages/BlueprintView';
-import InventoryLookup from './pages/InventoryLookup';
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { AuthProvider, useAuth } from "./context/AuthContext";
+import LoginPage from "./pages/LoginPage";
+import POSLayout from "./components/POSLayout";
+import Dashboard from "./pages/Dashboard";
+import ProductSearch from "./pages/ProductSearch";
+import ProcessOrder from "./pages/ProcessOrder";
+import DeliveryScheduling from "./pages/DeliveryScheduling";
+import AppointmentScheduling from "./pages/AppointmentScheduling";
+import ReceiptPage from "./pages/ReceiptPage";
+import SalesReports from "./pages/SalesReports";
+import BlueprintView from "./pages/BlueprintView";
+import InventoryLookup from "./pages/InventoryLookup";
+import Assignments from "./pages/Assignments"; // <-- Added the new import
 
 const ProtectedRoute = ({ children }) => {
   const { user, loading } = useAuth();
@@ -25,14 +26,19 @@ function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
-          <Route path="/" element={
-            <ProtectedRoute>
-              <POSLayout />
-            </ProtectedRoute>
-          }>
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute>
+                <POSLayout />
+              </ProtectedRoute>
+            }
+          >
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="products" element={<ProductSearch />} />
+            <Route path="assignments" element={<Assignments />} />{" "}
+            {/* <-- Added the new route */}
             <Route path="order" element={<ProcessOrder />} />
             <Route path="delivery" element={<DeliveryScheduling />} />
             <Route path="appointment" element={<AppointmentScheduling />} />

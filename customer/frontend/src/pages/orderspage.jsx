@@ -305,8 +305,8 @@ function OrderModal({ orderId, onClose }) {
                         Your order has been delivered!
                       </div>
                       <div className="om-eta-desc">
-                        For any issues, please contact us within 7 days of
-                        delivery.
+                        Please confirm receipt of your order in the main page.
+                        For any issues, contact us within 7 days.
                       </div>
                     </div>
                   </div>
@@ -458,13 +458,39 @@ export default function OrdersPage() {
   const [selectedId, setSelectedId] = useState(null);
   const [filter, setFilter] = useState("all");
 
-  useEffect(() => {
+  const fetchOrders = () => {
+    setLoading(true);
     axios
       .get("/api/customer/orders")
       .then((r) => setOrders(r.data))
       .catch(() => {})
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    fetchOrders();
   }, []);
+
+  const handleConfirmOrder = async (e, orderId) => {
+    e.stopPropagation(); // Prevent the modal from opening
+    if (
+      window.confirm(
+        "Are you sure you want to confirm that you have received this order?",
+      )
+    ) {
+      try {
+        await axios.put(`/api/customer/orders/${orderId}/confirm`);
+        fetchOrders(); // Refresh to move it to 'Completed'
+      } catch (error) {
+        alert("Failed to confirm the order. Please try again.");
+      }
+    }
+  };
+
+  const handleReviewOrder = (e, orderId) => {
+    e.stopPropagation(); // Prevent the modal from opening
+    alert("Review feature coming soon!"); // Replace with your review logic later
+  };
 
   const STATUS_TABS = [
     { key: "all", label: "All Orders" },
@@ -622,7 +648,41 @@ export default function OrdersPage() {
                 )}
                 <div className="order-card-footer">
                   <span className="order-card-total">{fmt(order.total)}</span>
-                  <span className="order-card-view">Track Order →</span>
+
+                  {/* Dynamic Footer Actions Based on Status */}
+                  {order.status === "delivered" ? (
+                    <div style={{ display: "flex", gap: "10px" }}>
+                      <button
+                        style={{
+                          background: "transparent",
+                          border: "1px solid #ccc",
+                          padding: "6px 16px",
+                          borderRadius: "4px",
+                          cursor: "pointer",
+                          fontWeight: 500,
+                        }}
+                        onClick={(e) => handleReviewOrder(e, order.id)}
+                      >
+                        Review
+                      </button>
+                      <button
+                        style={{
+                          background: "#c1602a", // Colored to stand out
+                          color: "#fff",
+                          border: "none",
+                          padding: "6px 16px",
+                          borderRadius: "4px",
+                          cursor: "pointer",
+                          fontWeight: 500,
+                        }}
+                        onClick={(e) => handleConfirmOrder(e, order.id)}
+                      >
+                        Confirm
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="order-card-view">Track Order →</span>
+                  )}
                 </div>
               </div>
             );

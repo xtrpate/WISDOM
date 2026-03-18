@@ -4,6 +4,7 @@
  * GET  /api/customer/orders       — list my orders
  * GET  /api/customer/orders/:id   — single order detail
  * GET  /api/customer/settings     — payment info (gcash, bank)
+ * PUT  /api/customer/orders/:id/confirm — customer confirms order delivery
  */
 
 const express = require("express");
@@ -265,6 +266,33 @@ router.get("/:id", authenticate, requireCustomer, async (req, res) => {
     res.json(order);
   } catch (err) {
     console.error("[customer.orders/:id]", err);
+    res.status(500).json({ message: "Server error.", error: err.message });
+  }
+});
+
+/* ─────────────────────────────────────────────────
+   PUT /api/customer/orders/:id/confirm
+   Customer confirming they have received the order
+───────────────────────────────────────────────── */
+router.put("/:id/confirm", authenticate, requireCustomer, async (req, res) => {
+  try {
+    const [result] = await db.execute(
+      `UPDATE orders
+       SET status = 'completed'
+       WHERE id = ? AND customer_id = ? AND status = 'delivered'`,
+      [req.params.id, req.user.id],
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(400).json({
+        message:
+          "Order could not be confirmed. It may not exist or is not in 'delivered' status.",
+      });
+    }
+
+    res.json({ message: "Order confirmed successfully." });
+  } catch (err) {
+    console.error("[customer.orders/:id/confirm]", err);
     res.status(500).json({ message: "Server error.", error: err.message });
   }
 });
