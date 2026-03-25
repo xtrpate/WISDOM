@@ -214,6 +214,18 @@ const blueprintStyles = {
     userSelect: "none",
     WebkitUserSelect: "none",
   },
+  fullScreenWrapper: {
+    position: "fixed",
+    top: 0,
+    left: 0,
+    width: "100vw",
+    height: "100vh",
+    zIndex: 9999,
+    display: "flex",
+    flexDirection: "column",
+    background: "#0f172a",
+    overflow: "hidden",
+  },
 };
 
 export default blueprintStyles;

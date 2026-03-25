@@ -8,6 +8,7 @@ import {
 import { WOOD_FINISH_MAP, WOOD_FINISHES } from "../data/furnitureTypes";
 import { getWoodFinish } from "../data/componentUtils";
 import { clamp } from "../data/utils";
+import { createRoundedBoxGeometry } from "./cornerRadius";
 
 function getMaterialPalette(comp) {
   const finish = comp.finish ? getWoodFinish(comp.finish) : null;
@@ -106,11 +107,7 @@ function createMaterial(fill, selected, editing) {
     sheenRoughness: 0.42,
     transparent: false,
     opacity: 1,
-    emissive: editing
-      ? new THREE.Color("#60a5fa")
-      : selected
-        ? new THREE.Color("#f59e0b")
-        : new THREE.Color("#000000"),
+    emissive: editing ? new THREE.Color("#60a5fa") : new THREE.Color("#000000"),
     emissiveIntensity: editing ? 0.18 : selected ? 0.08 : 0,
   });
 }
@@ -140,11 +137,11 @@ function addBoxPart(
   material,
   rootId,
   castShadow = true,
+  radius = 0,
 ) {
-  const mesh = new THREE.Mesh(
-    new THREE.BoxGeometry(dims[0], dims[1], dims[2]),
-    material.clone(),
-  );
+  const geometry = createRoundedBoxGeometry(dims[0], dims[1], dims[2], radius);
+
+  const mesh = new THREE.Mesh(geometry, material.clone());
   mesh.position.set(pos[0], pos[1], pos[2]);
   mesh.castShadow = castShadow;
   mesh.receiveShadow = true;
@@ -165,6 +162,7 @@ function addRoundedPanel(
   z,
   material,
   rootId,
+  radius = 0,
 ) {
   const shape = new THREE.Shape();
   const r = Math.min(6, w * 0.08, h * 0.08);
@@ -188,7 +186,12 @@ function addRoundedPanel(
   });
   geo.center();
 
-  const mesh = new THREE.Mesh(geo, material.clone());
+  const targetRadius = radius > 0 ? radius : Math.min(6, w * 0.08, h * 0.08);
+
+  // USE THE NEW GEOMETRY GENERATOR HERE
+  const geometry = createRoundedBoxGeometry(w, h, d, targetRadius);
+
+  const mesh = new THREE.Mesh(geometry, material.clone());
   mesh.position.set(x, y, z);
   mesh.castShadow = true;
   mesh.receiveShadow = true;

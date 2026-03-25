@@ -70,6 +70,7 @@ function createFurnitureObject(comp, selected, editing, selectableMeshes) {
       0,
       frontMat,
       comp.id,
+      r,
     );
     addEdgeHighlight(root, seat, palette.edge, 0.09);
     return root;
@@ -83,6 +84,8 @@ function createFurnitureObject(comp, selected, editing, selectableMeshes) {
       [0, 0, 0],
       frontMat,
       comp.id,
+      true,
+      r,
     );
     addEdgeHighlight(root, leg, palette.edge, 0.08);
     return root;
@@ -100,6 +103,8 @@ function createFurnitureObject(comp, selected, editing, selectableMeshes) {
       [0, 0, 0],
       frontMat,
       comp.id,
+      true,
+      r,
     );
     addEdgeHighlight(root, rail, palette.edge, 0.08);
     return root;
@@ -117,6 +122,7 @@ function createFurnitureObject(comp, selected, editing, selectableMeshes) {
       0,
       frontMat,
       comp.id,
+      r,
     );
     addEdgeHighlight(root, slat, palette.edge, 0.08);
     return root;
@@ -178,7 +184,7 @@ function createFurnitureObject(comp, selected, editing, selectableMeshes) {
   }
 
   if (comp.type === "office_chair") {
-    buildOfficeChair3D(root, selectableMeshes, comp, palette);
+    buildOfficeChair3D(root, selectableMeshes, comp, palette, r);
     return root;
   }
 
@@ -241,6 +247,7 @@ function createFurnitureObject(comp, selected, editing, selectableMeshes) {
       0,
       countertopMat,
       comp.id,
+      r,
     );
     addEdgeHighlight(root, top, 0xf2dcc2, 0.08);
     return root;
@@ -267,6 +274,8 @@ function createFurnitureObject(comp, selected, editing, selectableMeshes) {
       [0, 0, 0],
       boardMat,
       comp.id,
+      true,
+      r,
     );
 
     const frame = new THREE.Mesh(
@@ -310,6 +319,7 @@ function createFurnitureObject(comp, selected, editing, selectableMeshes) {
         0,
         frontMat,
         comp.id,
+        r,
       );
     if (frontLegL)
       addBoxPart(
@@ -319,6 +329,8 @@ function createFurnitureObject(comp, selected, editing, selectableMeshes) {
         [-w / 2 + 18, -h / 2 + frontLegL.height / 2, -d / 2 + 40],
         carcassMat,
         comp.id,
+        true,
+        r,
       );
     if (frontLegR)
       addBoxPart(
@@ -328,6 +340,8 @@ function createFurnitureObject(comp, selected, editing, selectableMeshes) {
         [w / 2 - 18, -h / 2 + frontLegR.height / 2, -d / 2 + 40],
         carcassMat,
         comp.id,
+        true,
+        r,
       );
     if (backLegL)
       addBoxPart(
@@ -337,6 +351,8 @@ function createFurnitureObject(comp, selected, editing, selectableMeshes) {
         [-w / 2 + 18, 0, d / 2 - 20],
         carcassMat,
         comp.id,
+        true,
+        r,
       );
     if (backLegR)
       addBoxPart(
@@ -346,6 +362,8 @@ function createFurnitureObject(comp, selected, editing, selectableMeshes) {
         [w / 2 - 18, 0, d / 2 - 20],
         carcassMat,
         comp.id,
+        true,
+        r,
       );
     addRoundedPanel(
       root,
@@ -358,6 +376,7 @@ function createFurnitureObject(comp, selected, editing, selectableMeshes) {
       d / 2 - 14,
       frontMat,
       comp.id,
+      r,
     );
     addRoundedPanel(
       root,
@@ -370,6 +389,7 @@ function createFurnitureObject(comp, selected, editing, selectableMeshes) {
       d / 2 - 14,
       frontMat,
       comp.id,
+      r,
     );
     addRoundedPanel(
       root,
@@ -382,21 +402,24 @@ function createFurnitureObject(comp, selected, editing, selectableMeshes) {
       d / 2 - 14,
       frontMat,
       comp.id,
+      r,
     );
     return root;
   }
 
   if (comp.type === "rounded_box") {
-    const r = Number(comp.cornerRadius) || 20;
+    const boxR = Number(comp.cornerRadius) || 20;
     const body = addRoundedBox(
       root,
       selectableMeshes,
       w,
       h,
       d,
-      r,
+      boxR,
       frontMat,
       comp.id,
+      true,
+      r,
     );
     addEdgeHighlight(root, body, palette.edge, 0.09);
     return root;
@@ -412,6 +435,7 @@ function createFurnitureObject(comp, selected, editing, selectableMeshes) {
       d,
       frontMat,
       comp.id,
+      r,
     );
     addEdgeHighlight(root, mesh, palette.edge, 0.07);
     return root;
@@ -426,6 +450,7 @@ function createFurnitureObject(comp, selected, editing, selectableMeshes) {
       d,
       frontMat,
       comp.id,
+      r,
     );
     addEdgeHighlight(root, mesh, palette.edge, 0.07);
     return root;
@@ -440,6 +465,7 @@ function createFurnitureObject(comp, selected, editing, selectableMeshes) {
       d,
       frontMat,
       comp.id,
+      r,
     );
     addEdgeHighlight(root, mesh, palette.edge, 0.07);
     return root;
@@ -456,6 +482,7 @@ function createFurnitureObject(comp, selected, editing, selectableMeshes) {
       frontMat,
       comp.id,
       ratio,
+      r,
     );
     addEdgeHighlight(root, mesh, palette.edge, 0.07);
     return root;
@@ -468,6 +495,8 @@ function createFurnitureObject(comp, selected, editing, selectableMeshes) {
     [0, 0, 0],
     frontMat,
     comp.id,
+    true,
+    r,
   );
   addEdgeHighlight(root, body, palette.edge, 0.07);
   return root;

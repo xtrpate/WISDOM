@@ -275,7 +275,7 @@ export default function BlueprintDesign() {
     }
 
     if (!selectedId || !components.some((c) => c.id === selectedId)) {
-      setSelectedId(components[0].id);
+      setSelectedId(null);
       setEdit3DId(null);
     }
   }, [components, selectedId, edit3DId]);
@@ -757,6 +757,9 @@ export default function BlueprintDesign() {
         return;
       }
       pushHistory(components);
+      const targetIds = new Set(
+        selectedIds.includes(cid) ? selectedIds : [cid],
+      );
       setComponents((prev) =>
         prev.map((c) =>
           c.id === cid ? normalizeComponent({ ...c, ...attrs }) : c,
@@ -768,9 +771,9 @@ export default function BlueprintDesign() {
 
   const switchToReferenceMode = useCallback(() => {
     setEditorMode("reference");
-    setView(referenceFile?.url ? "front" : "3d");
-    toast.success("Reference mode enabled.");
-  }, [referenceFile]);
+    setView((prevView) => (prevView === "3d" ? "front" : prevView));
+    toast.success("Reference Mode enabled. Blueprints are now read-only.");
+  }, []);
 
   const switchToEditableMode = useCallback(() => {
     setEditorMode("editable");
@@ -1081,17 +1084,28 @@ export default function BlueprintDesign() {
       return;
     }
 
-    const comp = components.find((c) => c.id === selectedId);
-    if (!comp) return;
+    // Target all selected IDs
+    const idsToRemove = new Set(
+      selectedIds.length > 0 ? selectedIds : [selectedId].filter(Boolean),
+    );
 
-    if (isLocked(comp)) {
-      toast.error("Component is locked.");
+    if (idsToRemove.size === 0) return;
+
+    // Prevent deletion if ANY of the selected components are locked
+    const hasLocked = components.some(
+      (c) => idsToRemove.has(c.id) && isLocked(c),
+    );
+    if (hasLocked) {
+      toast.error("Cannot delete. One or more selected components are locked.");
       return;
     }
 
-    setComponents((prev) => prev.filter((c) => c.id !== selectedId));
+    pushHistory(components);
+    setComponents((prev) => prev.filter((c) => !idsToRemove.has(c.id)));
     setSelectedId(null);
+    setSelectedIds([]);
     setEdit3DId(null);
+    toast.success(`Deleted ${idsToRemove.size} object(s).`);
   };
 
   const saveDesign = async () => {
@@ -1236,14 +1250,7 @@ export default function BlueprintDesign() {
   }, [selectedComponents]);
 
   return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        height: "calc(100vh - 64px)",
-        background: "#0f172a",
-      }}
-    >
+    <div style={S.fullScreenWrapper}>
       <div
         style={{
           background: "#1e2a38",
@@ -1468,6 +1475,13 @@ export default function BlueprintDesign() {
               📎 Open Reference
             </button>
           )}
+
+          <button
+            onClick={() => navigate(`/blueprints/${id}/import`)}
+            style={{ ...S.toolBtn, background: "#0ea5e9" }}
+          >
+            📥 Import
+          </button>
 
           <button
             onClick={() => openExportSheets(false)}

@@ -17,6 +17,7 @@ const CABINET_COMPONENT_TYPES = [
     material: "Marine Plywood",
     unitPrice: 8500,
     blueprintStyle: "casework",
+    cornerRadius: 0,
   },
   {
     label: "Base Cabinet",
@@ -29,6 +30,7 @@ const CABINET_COMPONENT_TYPES = [
     material: "Marine Plywood",
     unitPrice: 9500,
     blueprintStyle: "casework",
+    cornerRadius: 0,
   },
   {
     label: "Drawer Stack",
@@ -41,6 +43,7 @@ const CABINET_COMPONENT_TYPES = [
     material: "Plywood + Rail",
     unitPrice: 3200,
     blueprintStyle: "drawer_stack",
+    cornerRadius: 0,
   },
   {
     label: "Door (Single)",
@@ -53,6 +56,7 @@ const CABINET_COMPONENT_TYPES = [
     material: "Laminated Board",
     unitPrice: 1800,
     blueprintStyle: "door",
+    cornerRadius: 0,
   },
   {
     label: "Door (Double)",
@@ -65,6 +69,7 @@ const CABINET_COMPONENT_TYPES = [
     material: "Laminated Board",
     unitPrice: 3200,
     blueprintStyle: "door",
+    cornerRadius: 0,
   },
   {
     label: "Shelf",
@@ -77,6 +82,7 @@ const CABINET_COMPONENT_TYPES = [
     material: "Marine Plywood",
     unitPrice: 1500,
     blueprintStyle: "shelf",
+    cornerRadius: 0,
   },
   {
     label: "Countertop",
@@ -89,6 +95,7 @@ const CABINET_COMPONENT_TYPES = [
     material: "Solid Surface",
     unitPrice: 12000,
     blueprintStyle: "countertop",
+    cornerRadius: 0,
   },
   {
     label: "Hardware",
@@ -101,6 +108,7 @@ const CABINET_COMPONENT_TYPES = [
     material: "Metal",
     unitPrice: 500,
     blueprintStyle: "hardware",
+    cornerRadius: 0,
   },
   {
     label: "Kitchen Cabinet",
@@ -113,6 +121,7 @@ const CABINET_COMPONENT_TYPES = [
     material: "Marine Plywood + Countertop",
     unitPrice: 28500,
     blueprintStyle: "casework",
+    cornerRadius: 0,
   },
 ];
 
@@ -128,6 +137,7 @@ const ROOM_FURNITURE_COMPONENT_TYPES = [
     material: "Oak Wood",
     unitPrice: 7800,
     blueprintStyle: "table",
+    cornerRadius: 0,
   },
   {
     label: "Entertainment Center / TV Stand",
@@ -140,6 +150,7 @@ const ROOM_FURNITURE_COMPONENT_TYPES = [
     material: "Engineered Wood",
     unitPrice: 12800,
     blueprintStyle: "casework",
+    cornerRadius: 0,
   },
   {
     label: "Sideboard",
@@ -152,6 +163,7 @@ const ROOM_FURNITURE_COMPONENT_TYPES = [
     material: "Oak Veneer",
     unitPrice: 15200,
     blueprintStyle: "casework",
+    cornerRadius: 0,
   },
   {
     label: "Bookshelf",
@@ -164,6 +176,7 @@ const ROOM_FURNITURE_COMPONENT_TYPES = [
     material: "Oak Wood",
     unitPrice: 9800,
     blueprintStyle: "open_shelf",
+    cornerRadius: 0,
   },
   {
     label: "Sofa",
@@ -176,6 +189,7 @@ const ROOM_FURNITURE_COMPONENT_TYPES = [
     material: "Wood Frame + Upholstery",
     unitPrice: 26500,
     blueprintStyle: "sofa",
+    cornerRadius: 0,
   },
   {
     label: "Bed Frame",
@@ -188,6 +202,7 @@ const ROOM_FURNITURE_COMPONENT_TYPES = [
     material: "Oak Wood",
     unitPrice: 19800,
     blueprintStyle: "bed",
+    cornerRadius: 0,
   },
   {
     label: "Dresser",
@@ -200,6 +215,7 @@ const ROOM_FURNITURE_COMPONENT_TYPES = [
     material: "Engineered Wood",
     unitPrice: 13200,
     blueprintStyle: "drawer_stack",
+    cornerRadius: 0,
   },
   {
     label: "Nightstand",
@@ -212,6 +228,7 @@ const ROOM_FURNITURE_COMPONENT_TYPES = [
     material: "Oak Veneer",
     unitPrice: 5200,
     blueprintStyle: "drawer_stack",
+    cornerRadius: 0,
   },
   {
     label: "Wardrobe",
@@ -224,6 +241,7 @@ const ROOM_FURNITURE_COMPONENT_TYPES = [
     material: "Plywood + Laminate",
     unitPrice: 24800,
     blueprintStyle: "casework",
+    cornerRadius: 0,
   },
   {
     label: "Dining Table",
@@ -236,6 +254,7 @@ const ROOM_FURNITURE_COMPONENT_TYPES = [
     material: "Oak Wood",
     unitPrice: 16200,
     blueprintStyle: "table",
+    cornerRadius: 0,
   },
   {
     label: "Dining Chair",
@@ -248,6 +267,7 @@ const ROOM_FURNITURE_COMPONENT_TYPES = [
     material: "Oak Wood",
     unitPrice: 4200,
     blueprintStyle: "chair_template",
+    cornerRadius: 0,
   },
   {
     label: "Dining Bench",
@@ -260,6 +280,7 @@ const ROOM_FURNITURE_COMPONENT_TYPES = [
     material: "Oak Wood",
     unitPrice: 7800,
     blueprintStyle: "bench",
+    cornerRadius: 0,
   },
   {
     label: "Office Desk",
@@ -272,6 +293,7 @@ const ROOM_FURNITURE_COMPONENT_TYPES = [
     material: "Wood + Metal",
     unitPrice: 10800,
     blueprintStyle: "table",
+    cornerRadius: 0,
   },
   {
     label: "Bookcase",
@@ -284,6 +306,7 @@ const ROOM_FURNITURE_COMPONENT_TYPES = [
     material: "Plywood",
     unitPrice: 8400,
     blueprintStyle: "open_shelf",
+    cornerRadius: 0,
   },
   {
     label: "Office Chair",
@@ -296,6 +319,7 @@ const ROOM_FURNITURE_COMPONENT_TYPES = [
     material: "Metal + Upholstery",
     unitPrice: 6500,
     blueprintStyle: "office_chair",
+    cornerRadius: 0,
   },
   {
     label: "Garden Bench",
@@ -308,6 +332,7 @@ const ROOM_FURNITURE_COMPONENT_TYPES = [
     material: "Teak Wood",
     unitPrice: 13800,
     blueprintStyle: "bench_back",
+    cornerRadius: 0,
   },
   {
     label: "Lounger",
@@ -320,6 +345,7 @@ const ROOM_FURNITURE_COMPONENT_TYPES = [
     material: "Teak Wood",
     unitPrice: 11800,
     blueprintStyle: "lounger",
+    cornerRadius: 0,
   },
   {
     label: "Patio Dining Set",
@@ -332,6 +358,7 @@ const ROOM_FURNITURE_COMPONENT_TYPES = [
     material: "Teak Wood",
     unitPrice: 29800,
     blueprintStyle: "patio_set",
+    cornerRadius: 0,
   },
 ];
 
@@ -343,6 +370,7 @@ const CHAIR_TEMPLATE_TYPES = [
     fill: "#d9c2a5",
     material: "Oak Wood",
     blueprintStyle: "chair_template",
+    cornerRadius: 0,
   },
 ];
 
@@ -357,6 +385,7 @@ const CHAIR_PART_TYPES = [
     fill: "#dbc3a5",
     material: "Oak Wood",
     unitPrice: 1200,
+    cornerRadius: 0,
   },
   {
     label: "Front Leg",
@@ -368,6 +397,7 @@ const CHAIR_PART_TYPES = [
     fill: "#c49a6c",
     material: "Oak Wood",
     unitPrice: 650,
+    cornerRadius: 0,
   },
   {
     label: "Back Leg",
@@ -379,6 +409,7 @@ const CHAIR_PART_TYPES = [
     fill: "#bb9060",
     material: "Oak Wood",
     unitPrice: 950,
+    cornerRadius: 0,
   },
   {
     label: "Front Rail",
@@ -390,6 +421,7 @@ const CHAIR_PART_TYPES = [
     fill: "#cda678",
     material: "Oak Wood",
     unitPrice: 480,
+    cornerRadius: 0,
   },
   {
     label: "Rear Rail",
@@ -401,6 +433,7 @@ const CHAIR_PART_TYPES = [
     fill: "#cda678",
     material: "Oak Wood",
     unitPrice: 480,
+    cornerRadius: 0,
   },
   {
     label: "Side Rail",
@@ -412,6 +445,7 @@ const CHAIR_PART_TYPES = [
     fill: "#cda678",
     material: "Oak Wood",
     unitPrice: 520,
+    cornerRadius: 0,
   },
   {
     label: "Back Slat",
@@ -423,6 +457,7 @@ const CHAIR_PART_TYPES = [
     fill: "#d7b589",
     material: "Oak Wood",
     unitPrice: 350,
+    cornerRadius: 0,
   },
 ];
 
@@ -521,6 +556,7 @@ const FURNITURE_TEMPLATE_TYPES = [
     fill: "#c69c6d",
     material: "Oak Wood",
     blueprintStyle: "assembly_template",
+    cornerRadius: 0,
   },
   {
     label: "Wooden Bed Frame",
@@ -529,6 +565,7 @@ const FURNITURE_TEMPLATE_TYPES = [
     fill: "#c79d73",
     material: "Oak Wood",
     blueprintStyle: "assembly_template",
+    cornerRadius: 0,
   },
   {
     label: "Wooden Wardrobe / Cabinet",
@@ -537,6 +574,7 @@ const FURNITURE_TEMPLATE_TYPES = [
     fill: "#8b5e3c",
     material: "Plywood + Laminate",
     blueprintStyle: "assembly_template",
+    cornerRadius: 0,
   },
   {
     label: "Wooden Coffee Table",
@@ -545,6 +583,7 @@ const FURNITURE_TEMPLATE_TYPES = [
     fill: "#8b5a2b",
     material: "Walnut Wood",
     blueprintStyle: "assembly_template",
+    cornerRadius: 0,
   },
   {
     label: "Closet / Wardrobe Cabinet",
@@ -553,6 +592,7 @@ const FURNITURE_TEMPLATE_TYPES = [
     fill: "#d2b48c",
     material: "Laminated plywood",
     blueprintStyle: "assembly_template",
+    cornerRadius: 0,
   },
 ];
 

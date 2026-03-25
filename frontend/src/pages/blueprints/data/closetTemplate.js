@@ -1,29 +1,8 @@
-// data/closetTemplate.js — Closet / Wardrobe cabinet assembly template
-// Based on: Sample_Mats_of_Products.docx — Closet / Wardrobe spec
-//
-// Overall cabinet: 900 W × 2400 H × 600 D mm
-// Parts:
-//   Cabinet Frame (Carcass) — 2 Side Panels, Top, Bottom, Back Panel
-//   Drawer                  — Front, 2 Sides, Back, Bottom
-//   Shelf                   — 1 Shelf Board
-//   Vertical Divider Panel  — 1 Divider
-//   Hanging Rod Assembly    — Rod + 2 Brackets
-
 import { createAssemblyPart } from "./componentUtils";
 
 const FLOOR_OFFSET = 40;
-const BOARD = 18; // standard board thickness mm
+const SURFACE_EPS = 1;
 
-/**
- * createClosetWardrobeComponents
- *
- * @param {number} originX  - X position of cabinet left edge in world space
- * @param {number} originZ  - Z position of cabinet front edge in world space
- * @param {number} canvasH  - world height (used to compute floor Y)
- * @param {string} groupId  - shared group ID for all parts
- * @param {string} groupLabel - label shown in UI (e.g. "Closet Wardrobe 1")
- * @returns {Array} array of normalized component objects
- */
 export function createClosetWardrobeComponents(
   originX,
   originZ,
@@ -32,312 +11,393 @@ export function createClosetWardrobeComponents(
   groupLabel,
 ) {
   const floorY = canvasH - FLOOR_OFFSET;
-  const t = BOARD; // 18 mm board thickness
 
-  // ── Cabinet overall dimensions ─────────────────────────────────────────────
-  const W = 900; // overall width
-  const H = 2400; // overall height
-  const D = 600; // overall depth
+  // overall size
+  const w = 3200;
+  const h = 2400;
+  const d = 600;
 
-  // ── Derived positions ──────────────────────────────────────────────────────
-  const cabinetTop = floorY - H;
-  const innerW = W - t * 2; // inner width between side panels
-  const innerD = D - t; // inner depth (back panel is 6mm, not t)
+  // board thickness
+  const t = 18;
+  const backT = 12;
+  const shelfT = 18;
+  const shelfDepth = d - 28;
+  const frontInset = 10;
+  const backBottomOverlap = 8;
 
-  // ── Divider splits cabinet into: left hanging zone (55%) + right drawer/shelf zone (45%)
-  const dividerX = originX + t + Math.round(innerW * 0.55);
-  const rightZoneW = originX + W - t - dividerX; // width of right zone
+  // openings
+  const bay1W = 740;
+  const bay2W = 700;
+  const bay3W = 930;
+  const bay4W = 740;
 
-  // ── Hanging rod sits in left zone at ~72% height
-  const rodY = cabinetTop + Math.round(H * 0.28);
+  const innerX = originX + t;
 
-  // ── Shelf is in right zone at ~55% height
-  const shelfY = cabinetTop + Math.round(H * 0.55);
+  const bay1X = innerX;
+  const div1X = bay1X + bay1W;
 
-  // ── Drawer is at bottom of right zone (200mm tall)
-  const drawerH = 200;
-  const drawerFrontY = floorY - t - drawerH; // sits just above bottom panel
+  const bay2X = div1X + t;
+  const div2X = bay2X + bay2W;
 
-  const base = {
-    groupId,
-    groupLabel,
-    groupType: "assembly",
-    category: "Cabinet Parts",
-    blueprintStyle: "casework",
+  const bay3X = div2X + t;
+  const div3X = bay3X + bay3W;
+
+  const bay4X = div3X + t;
+
+  const topY = floorY - h;
+  const topShelfY = topY + 255;
+  const rodY = topShelfY + 58;
+
+  const topAddOnX = originX + t;
+  const topAddOnW = w - t * 2;
+  const topAddOnZ = originZ + frontInset;
+  const topAddOnD = shelfDepth;
+
+  // base
+  const baseTopT = 18;
+  const baseFaceH = 96;
+  const baseTopY = floorY - baseFaceH - baseTopT;
+  const baseDepth = d - 18;
+
+  // shelves
+  const bay2Shelf1Y = topY + 650;
+  const bay2Shelf2Y = topY + 1020;
+  const bay1ExtraShelfY = topY + 1545;
+
+  // drawers
+  const bay2DrawerCoverY = topY + 1685;
+  const bay2DrawerFrontH = 210;
+  const bay2DrawerGap = 8;
+  const bay2Drawer1Y = bay2DrawerCoverY + shelfT + 5;
+  const bay2Drawer2Y = bay2Drawer1Y + bay2DrawerFrontH + bay2DrawerGap;
+
+  const bay3PedestalW = 320;
+  const bay3DrawerCoverY = topY + 1940;
+  const bay3DrawerY = bay3DrawerCoverY + shelfT + 5;
+  const bay3DrawerFrontW = bay3PedestalW - 28;
+  const bay3PedestalSideX = bay3X + bay3PedestalW - t;
+
+  const bay3TableTopY = topY + 1135;
+  const bay3TableZ = originZ + 140;
+  const bay3TableD = 430;
+  const bay3TableX = bay3PedestalSideX;
+  const bay3TableW = bay3W - (bay3PedestalW - t);
+
+  const C = {
+    carcass: "#8A5C38",
+    divider: "#7A4F2F",
+    shelf: "#A87449",
+    drawerFront: "#BC8456",
+    drawerBox: "#76492B",
+    drawerBottom: "#99663E",
+    back: "#6A4025",
+    metal: "#C9CED6",
+  };
+
+  const part = (data) =>
+    createAssemblyPart({
+      groupId,
+      groupLabel,
+      category: "Furniture Parts",
+      blueprintStyle: "part",
+      ...data,
+    });
+
+  const buildRaisedBase = ({ x, width, suffix }) => [
+    part({
+      type: "wr_base_top",
+      label: `Base Top ${suffix}`,
+      partCode: `WR-BT${suffix}`,
+      x,
+      y: baseTopY,
+      z: originZ,
+      width,
+      height: baseTopT,
+      depth: baseDepth,
+      fill: C.shelf,
+    }),
+  ];
+
+  const buildDrawerUnit = ({ x, y, frontW, frontH, suffix }) => {
+    const frontZ = originZ + d - 18 + SURFACE_EPS;
+    const bodyW = frontW - 24;
+    const boxZ = originZ + 40;
+
+    return [
+      part({
+        type: "wr_drawer_front",
+        label: `Drawer Front ${suffix}`,
+        partCode: `WR-DF${suffix}`,
+        x,
+        y,
+        z: frontZ,
+        width: frontW,
+        height: frontH,
+        depth: 18,
+        fill: C.drawerFront,
+      }),
+      part({
+        type: "wr_drawer_side",
+        label: `Drawer Side L ${suffix}`,
+        partCode: `WR-DSL${suffix}`,
+        x: x + 12,
+        y: y + 16,
+        z: boxZ,
+        width: 12,
+        height: 120,
+        depth: 400,
+        fill: C.drawerBox,
+      }),
+      part({
+        type: "wr_drawer_side",
+        label: `Drawer Side R ${suffix}`,
+        partCode: `WR-DSR${suffix}`,
+        x: x + frontW - 24,
+        y: y + 16,
+        z: boxZ,
+        width: 12,
+        height: 120,
+        depth: 400,
+        fill: C.drawerBox,
+      }),
+      part({
+        type: "wr_drawer_back",
+        label: `Drawer Back ${suffix}`,
+        partCode: `WR-DB${suffix}`,
+        x: x + 24,
+        y: y + 16,
+        z: boxZ + 388,
+        width: bodyW - 24,
+        height: 120,
+        depth: 12,
+        fill: C.drawerBox,
+      }),
+      part({
+        type: "wr_drawer_bottom",
+        label: `Drawer Bottom ${suffix}`,
+        partCode: `WR-DP${suffix}`,
+        x: x + 12,
+        y: y + 130,
+        z: boxZ + 12,
+        width: bodyW,
+        height: 6,
+        depth: 360,
+        fill: C.drawerBottom,
+      }),
+      part({
+        type: "wr_drawer_handle",
+        label: `Handle ${suffix}`,
+        partCode: `WR-HDL${suffix}`,
+        x: x + frontW / 2 - 50,
+        y: y + frontH / 2 - 8,
+        z: originZ + d + 6,
+        width: 100,
+        height: 16,
+        depth: 12,
+        fill: C.metal,
+      }),
+    ];
   };
 
   return [
-    // ═══════════════════════════════════════════════════════════════════════
-    // CABINET FRAME (CARCASS)
-    // ═══════════════════════════════════════════════════════════════════════
-
-    // Left Side Panel — 2400 × 600 × 18 mm — Laminated plywood / MDF
-    createAssemblyPart({
-      ...base,
-      type: "closet_side_panel",
-      label: "Left Side Panel",
-      partCode: "CSL",
+    // outer
+    part({
+      type: "wr_side_panel",
+      label: "Left Side",
+      partCode: "WR-SPL",
       x: originX,
-      y: cabinetTop,
+      y: topY,
       z: originZ,
       width: t,
-      height: H,
-      depth: D,
-      material: "Laminated plywood / MDF",
-      fill: "#d2b48c",
-      unitPrice: 3200,
+      height: h,
+      depth: d,
+      fill: C.carcass,
     }),
-
-    // Right Side Panel — 2400 × 600 × 18 mm — Laminated plywood / MDF
-    createAssemblyPart({
-      ...base,
-      type: "closet_side_panel",
-      label: "Right Side Panel",
-      partCode: "CSR",
-      x: originX + W - t,
-      y: cabinetTop,
+    part({
+      type: "wr_side_panel",
+      label: "Right Side",
+      partCode: "WR-SPR",
+      x: originX + w - t,
+      y: topY,
       z: originZ,
       width: t,
-      height: H,
-      depth: D,
-      material: "Laminated plywood / MDF",
-      fill: "#d2b48c",
-      unitPrice: 3200,
+      height: h,
+      depth: d,
+      fill: C.carcass,
     }),
 
-    // Top Panel — 900 × 600 × 18 mm — Laminated plywood
-    createAssemblyPart({
-      ...base,
-      type: "closet_top_panel",
-      label: "Top Panel",
-      partCode: "CTP",
-      x: originX,
-      y: cabinetTop,
+    part({
+      type: "wr_back_panel",
+      label: "Back",
+      partCode: "WR-BK",
+      x: originX + t,
+      y: topY + t,
       z: originZ,
-      width: W,
-      height: t,
-      depth: D,
-      material: "Laminated plywood",
-      fill: "#c8a87a",
-      unitPrice: 1800,
+      width: w - t * 2,
+      height: h - t + backBottomOverlap,
+      depth: backT,
+      fill: C.back,
     }),
 
-    // Bottom Panel — 900 × 600 × 18 mm — Laminated plywood
-    createAssemblyPart({
-      ...base,
-      type: "closet_bottom_panel",
-      label: "Bottom Panel",
-      partCode: "CBP",
-      x: originX,
-      y: floorY - t,
+    // dividers
+    part({
+      type: "wr_divider",
+      label: "Div1",
+      partCode: "WR-D1",
+      x: div1X,
+      y: topY + t,
       z: originZ,
-      width: W,
-      height: t,
-      depth: D,
-      material: "Laminated plywood",
-      fill: "#c8a87a",
-      unitPrice: 1800,
-    }),
-
-    // Back Panel — 2400 × 900 × 18 mm — Plywood (shown as 6mm thin)
-    createAssemblyPart({
-      ...base,
-      type: "closet_back_panel",
-      label: "Back Panel",
-      partCode: "CBKP",
-      x: originX,
-      y: cabinetTop,
-      z: originZ,
-      width: W,
-      height: H,
-      depth: 6,
-      material: "Plywood",
-      fill: "#b89a6e",
-      unitPrice: 2400,
-    }),
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // VERTICAL DIVIDER PANEL — 2400 × 550 × 18 mm — Laminated plywood / MDF
-    // ═══════════════════════════════════════════════════════════════════════
-    createAssemblyPart({
-      ...base,
-      type: "closet_divider",
-      label: "Vertical Divider Panel",
-      partCode: "CVD",
-      x: dividerX,
-      y: cabinetTop + t, // sits between top and bottom panels
-      z: originZ + t,
       width: t,
-      height: H - t * 2,
-      depth: D - t - 6, // leaves 6mm gap at back
-      material: "Laminated plywood / MDF",
-      fill: "#c4a06a",
-      unitPrice: 2800,
+      height: h - t * 2,
+      depth: d,
+      fill: C.divider,
+    }),
+    part({
+      type: "wr_divider",
+      label: "Div2",
+      partCode: "WR-D2",
+      x: div2X,
+      y: topY + t,
+      z: originZ,
+      width: t,
+      height: h - t * 2,
+      depth: d,
+      fill: C.divider,
+    }),
+    part({
+      type: "wr_divider",
+      label: "Div3",
+      partCode: "WR-D3",
+      x: div3X,
+      y: topY + t,
+      z: originZ,
+      width: t,
+      height: h - t * 2,
+      depth: d,
+      fill: C.divider,
     }),
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // SHELF — 900 × 550 × 18 mm — Laminated plywood / MDF
-    // (placed in right zone)
-    // ═══════════════════════════════════════════════════════════════════════
-    createAssemblyPart({
-      ...base,
-      type: "closet_shelf",
-      label: "Shelf Board",
-      partCode: "CSH",
-      x: dividerX + t,
-      y: shelfY,
-      z: originZ + t,
-      width: rightZoneW,
-      height: t,
-      depth: D - t - 6,
-      material: "Laminated plywood / MDF",
-      fill: "#c8a87a",
-      unitPrice: 1500,
+    // top shelves
+    part({
+      type: "wr_shelf",
+      label: "Top AddOn",
+      partCode: "WR-TOP",
+      x: topAddOnX,
+      y: topY,
+      z: topAddOnZ,
+      width: topAddOnW,
+      height: shelfT,
+      depth: topAddOnD,
+      fill: C.shelf,
     }),
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // HANGING ROD ASSEMBLY
-    // Rod: 900 mm length — Stainless steel / Aluminum
-    // ═══════════════════════════════════════════════════════════════════════
-
-    // Hanging Rod (in left zone)
-    createAssemblyPart({
-      ...base,
-      type: "closet_rod",
-      label: "Hanging Rod",
-      partCode: "CHR",
-      x: originX + t + 30, // 30mm from left side panel
+    // rods
+    part({
+      type: "wr_rod",
+      label: "Rod1",
+      partCode: "WR-R1",
+      x: bay1X + 40,
       y: rodY,
-      z: originZ + D * 0.35, // centered front-to-back
-      width: dividerX - originX - t - 30,
-      height: 25,
-      depth: 25,
-      material: "Stainless steel / Aluminum",
-      fill: "#94a3b8",
-      unitPrice: 800,
+      z: originZ + d * 0.6,
+      width: bay1W - 80,
+      height: 16,
+      depth: 16,
+      fill: C.metal,
+    }),
+    part({
+      type: "wr_rod",
+      label: "Rod3",
+      partCode: "WR-R3",
+      x: bay3X + 40,
+      y: rodY,
+      z: originZ + d * 0.6,
+      width: bay3W - 80,
+      height: 16,
+      depth: 16,
+      fill: C.metal,
+    }),
+    part({
+      type: "wr_rod",
+      label: "Rod4",
+      partCode: "WR-R4",
+      x: bay4X + 40,
+      y: rodY,
+      z: originZ + d * 0.6,
+      width: bay4W - 80,
+      height: 16,
+      depth: 16,
+      fill: C.metal,
     }),
 
-    // Rod Bracket Left
-    createAssemblyPart({
-      ...base,
-      type: "closet_rod_bracket",
-      label: "Rod Bracket L",
-      partCode: "CHRBL",
-      x: originX + t + 10,
-      y: rodY - 20,
-      z: originZ + D * 0.35,
-      width: 20,
-      height: 40,
-      depth: 20,
-      material: "Steel",
-      fill: "#64748b",
-      unitPrice: 200,
+    // bases
+    ...buildRaisedBase({ x: bay1X, width: bay1W, suffix: "1" }),
+    ...buildRaisedBase({ x: bay2X, width: bay2W, suffix: "2" }),
+    ...buildRaisedBase({ x: bay3X, width: bay3W, suffix: "3" }),
+    ...buildRaisedBase({ x: bay4X, width: bay4W, suffix: "4" }),
+
+    // center shelves
+    part({
+      type: "wr_shelf",
+      label: "Center1",
+      partCode: "WR-C1",
+      x: bay2X,
+      y: bay2Shelf1Y,
+      z: originZ + frontInset,
+      width: bay2W,
+      height: shelfT,
+      depth: shelfDepth,
+      fill: C.shelf,
+    }),
+    part({
+      type: "wr_shelf",
+      label: "Center2",
+      partCode: "WR-C2",
+      x: bay2X,
+      y: bay2Shelf2Y,
+      z: originZ + frontInset,
+      width: bay2W,
+      height: shelfT,
+      depth: shelfDepth,
+      fill: C.shelf,
     }),
 
-    // Rod Bracket Right
-    createAssemblyPart({
-      ...base,
-      type: "closet_rod_bracket",
-      label: "Rod Bracket R",
-      partCode: "CHRBR",
-      x: dividerX - 30,
-      y: rodY - 20,
-      z: originZ + D * 0.35,
-      width: 20,
-      height: 40,
-      depth: 20,
-      material: "Steel",
-      fill: "#64748b",
-      unitPrice: 200,
+    // drawers
+    ...buildDrawerUnit({
+      x: bay2X + 10,
+      y: bay2Drawer1Y,
+      frontW: bay2W - 20,
+      frontH: bay2DrawerFrontH,
+      suffix: "1",
+    }),
+    ...buildDrawerUnit({
+      x: bay2X + 10,
+      y: bay2Drawer2Y,
+      frontW: bay2W - 20,
+      frontH: bay2DrawerFrontH,
+      suffix: "2",
     }),
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // DRAWER (in right zone, at bottom)
-    // ═══════════════════════════════════════════════════════════════════════
-
-    // Drawer Front Panel — 450 × 200 × 18 mm — MDF
-    createAssemblyPart({
-      ...base,
-      type: "closet_drawer_front",
-      label: "Drawer Front Panel",
-      partCode: "CDF",
-      x: dividerX + t,
-      y: drawerFrontY,
-      z: originZ, // flush with cabinet front
-      width: 450,
-      height: drawerH,
-      depth: t,
-      material: "MDF",
-      fill: "#dac8b0",
-      unitPrice: 1200,
+    // small drawer
+    ...buildDrawerUnit({
+      x: bay3X + 12,
+      y: bay3DrawerY,
+      frontW: bay3DrawerFrontW,
+      frontH: 160,
+      suffix: "3",
     }),
 
-    // Drawer Side Panel L — 450 × 120 × 12 mm — Plywood
-    createAssemblyPart({
-      ...base,
-      type: "closet_drawer_side",
-      label: "Drawer Side L",
-      partCode: "CDSL",
-      x: dividerX + t,
-      y: drawerFrontY + (drawerH - 120) / 2,
-      z: originZ + t,
-      width: 12,
-      height: 120,
-      depth: 450,
-      material: "Plywood",
-      fill: "#c4a882",
-      unitPrice: 600,
-    }),
-
-    // Drawer Side Panel R — 450 × 120 × 12 mm — Plywood
-    createAssemblyPart({
-      ...base,
-      type: "closet_drawer_side",
-      label: "Drawer Side R",
-      partCode: "CDSR",
-      x: dividerX + t + 450 - 12,
-      y: drawerFrontY + (drawerH - 120) / 2,
-      z: originZ + t,
-      width: 12,
-      height: 120,
-      depth: 450,
-      material: "Plywood",
-      fill: "#c4a882",
-      unitPrice: 600,
-    }),
-
-    // Drawer Back Panel — 350 × 120 × 12 mm — Plywood
-    createAssemblyPart({
-      ...base,
-      type: "closet_drawer_back",
-      label: "Drawer Back Panel",
-      partCode: "CDBK",
-      x: dividerX + t + 12,
-      y: drawerFrontY + (drawerH - 120) / 2,
-      z: originZ + t + 450 - 12,
-      width: 350,
-      height: 120,
-      depth: 12,
-      material: "Plywood",
-      fill: "#c4a882",
-      unitPrice: 500,
-    }),
-
-    // Drawer Bottom Panel — 450 × 350 × 6 mm — Plywood
-    createAssemblyPart({
-      ...base,
-      type: "closet_drawer_bottom",
-      label: "Drawer Bottom Panel",
-      partCode: "CDBT",
-      x: dividerX + t + 12,
-      y: drawerFrontY + drawerH - 6,
-      z: originZ + t,
-      width: 350,
-      height: 6,
-      depth: 450,
-      material: "Plywood",
-      fill: "#b89a6e",
-      unitPrice: 400,
+    // table
+    part({
+      type: "wr_table",
+      label: "Side Table",
+      partCode: "WR-TBL",
+      x: bay3TableX,
+      y: bay3TableTopY,
+      z: bay3TableZ,
+      width: bay3TableW,
+      height: shelfT,
+      depth: bay3TableD,
+      fill: C.shelf,
     }),
   ];
 }

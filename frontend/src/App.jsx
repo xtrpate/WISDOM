@@ -5,6 +5,7 @@ import { Toaster } from "react-hot-toast";
 import useAuthStore from "./store/authStore";
 import ErrorBoundary from "./components/ErrorBoundary";
 import TasksPage from "./pages/tasks/TasksPage";
+import ImportPage from "./pages/blueprints/importPage";
 
 // ── Layout ────────────────────────────────────────────────────────────────────
 import AdminLayout from "./components/layout/AdminLayout";
@@ -68,6 +69,7 @@ export default function App() {
         <Routes>
           {/* Public */}
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/blueprints/:id/import" element={<ImportPage />} />
 
           {/* Admin Panel – requires auth */}
           <Route

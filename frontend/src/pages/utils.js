@@ -1,3 +1,6 @@
+import { useState, useEffect } from "react";
+import api from "../services/api";
+
 // data/utils.js — Small shared utility functions
 const GRID_SIZE = 20;
 const MM_PER_INCH = 25.4;

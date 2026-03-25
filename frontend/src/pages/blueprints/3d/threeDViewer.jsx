@@ -411,6 +411,8 @@ function ThreeDViewer({
   const edit3DIdRef = useRef(edit3DId);
   const transformModeRef = useRef(transformMode);
 
+  const selectedIdsRef = useRef(selectedIds || []);
+
   const onUpdateCompRef = useRef(onUpdateComp);
   const setSelectedIdRef = useRef(setSelectedId);
   const setEdit3DIdRef = useRef(setEdit3DId);
@@ -766,6 +768,13 @@ function ThreeDViewer({
         editing,
         selectableMeshesRef.current,
       );
+      if (selected) {
+        const selectionBox = new THREE.BoxHelper(obj, 0x38bdf8); // Light Blue
+        selectionBox.material.depthTest = false; // Makes it visible through other objects
+        selectionBox.material.transparent = true;
+        selectionBox.material.opacity = 0.8;
+        obj.add(selectionBox);
+      }
       const pos = worldFromComp(comp);
 
       obj.position.set(pos.x, pos.y, pos.z);
@@ -1017,8 +1026,8 @@ function ThreeDViewer({
 
       if (!hit?.object?.userData?.rootId) {
         setSelectedIdRef.current(null);
+        setSelectedIds([]); // Clear multi-selection
         setEdit3DIdRef.current(null);
-        setSelectedIds([]);
         transform.detach();
         storeCameraView();
         return;
@@ -1029,10 +1038,39 @@ function ThreeDViewer({
       if (!entry || isLocked3DRef.current(entry.comp)) return;
 
       preserveCameraView(() => {
-        setSelectedIdRef.current(hitId);
-        setSelectedIds([]);
-        setEdit3DIdRef.current(hitId);
-        transform.attach(entry.obj);
+        if (e.shiftKey) {
+          // --- MULTI-SELECTION LOGIC (SHIFT+CLICK) ---
+          const currentMulti = [...selectedIdsRef.current];
+          const primary = selectedIdRef.current;
+          const activeSet = new Set(
+            currentMulti.length ? currentMulti : primary ? [primary] : [],
+          );
+
+          if (activeSet.has(hitId)) {
+            activeSet.delete(hitId); // Toggle off if already selected
+          } else {
+            activeSet.add(hitId); // Toggle on
+          }
+
+          const newArr = Array.from(activeSet);
+          const newPrimary = newArr[newArr.length - 1] || null; // The last clicked item gets the gizmo
+
+          setSelectedIdRef.current(newPrimary);
+          setSelectedIds(newArr); // Pass the array of IDs up to BlueprintDesign
+          setEdit3DIdRef.current(newPrimary);
+
+          if (newPrimary) {
+            transform.attach(entryMapRef.current.get(newPrimary).obj);
+          } else {
+            transform.detach();
+          }
+        } else {
+          // --- SINGLE SELECTION LOGIC ---
+          setSelectedIdRef.current(hitId);
+          setSelectedIds([hitId]);
+          setEdit3DIdRef.current(hitId);
+          transform.attach(entry.obj);
+        }
         applyTransformModeRaw();
       });
 
