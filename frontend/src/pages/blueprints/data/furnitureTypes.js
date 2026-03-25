@@ -546,6 +546,14 @@ const FURNITURE_TEMPLATE_TYPES = [
     material: "Walnut Wood",
     blueprintStyle: "assembly_template",
   },
+  {
+    label: "Closet / Wardrobe Cabinet",
+    type: "template_closet_wardrobe",
+    category: "Furniture Templates",
+    fill: "#d2b48c",
+    material: "Laminated plywood",
+    blueprintStyle: "assembly_template",
+  },
 ];
 
 const FURNITURE_TEMPLATE_SET = new Set(

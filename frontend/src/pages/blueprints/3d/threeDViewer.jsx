@@ -203,7 +203,7 @@ function Floating3DInspector({
       )}
 
       <div style={{ marginBottom: 6 }}>
-        <label style={S.floatingLabel}>Qty</label>
+        <label style={S.floatingLabel}>Rotation Y (°)</label>
         <input
           type="number"
           value={selectedComp.rotationY ?? 0}
@@ -485,7 +485,9 @@ function ThreeDViewer({
       x: snap(obj.position.x - comp.width / 2 + canvasW / 2),
       y: snap(canvasH / 2 - obj.position.y - comp.height / 2),
       z: snap(obj.position.z - comp.depth / 2 + canvasD / 2),
+      rotationX: Math.round(THREE.MathUtils.radToDeg(obj.rotation.x) / 15) * 15,
       rotationY: Math.round(THREE.MathUtils.radToDeg(obj.rotation.y) / 15) * 15,
+      rotationZ: Math.round(THREE.MathUtils.radToDeg(obj.rotation.z) / 15) * 15,
       width: snap(Math.max(GRID_SIZE, comp.width * obj.scale.x)),
       height: snap(Math.max(GRID_SIZE, comp.height * obj.scale.y)),
       depth: snap(Math.max(GRID_SIZE, comp.depth * obj.scale.z)),
@@ -767,7 +769,9 @@ function ThreeDViewer({
       const pos = worldFromComp(comp);
 
       obj.position.set(pos.x, pos.y, pos.z);
+      obj.rotation.x = THREE.MathUtils.degToRad(comp.rotationX || 0);
       obj.rotation.y = THREE.MathUtils.degToRad(comp.rotationY || 0);
+      obj.rotation.z = THREE.MathUtils.degToRad(comp.rotationZ || 0);
       obj.scale.set(1, 1, 1);
       obj.userData.id = comp.id;
 

@@ -84,7 +84,9 @@ function normalizeComponent(c) {
     width: Math.max(GRID_SIZE, snap(Number(c.width) || 120)),
     height: Math.max(GRID_SIZE, snap(Number(c.height) || 80)),
     depth: Math.max(GRID_SIZE, snap(Number(c.depth) || 60)),
+    rotationX: Math.round(Number(c.rotationX) || 0),
     rotationY: Math.round(Number(c.rotationY) || 0),
+    rotationZ: Math.round(Number(c.rotationZ) || 0),
     fill: resolvedFinishId
       ? finish?.front || c.fill || "#d9c2a5"
       : c.fill || "#d9c2a5",

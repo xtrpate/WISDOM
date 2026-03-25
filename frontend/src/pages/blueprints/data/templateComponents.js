@@ -14,6 +14,7 @@ import {
   isChairPartType,
 } from "./componentUtils";
 import { makeGroupId } from "./utils";
+import { createClosetWardrobeComponents } from "./closetTemplate";
 
 const GRID_SIZE = 20;
 const FLOOR_OFFSET = 40;
@@ -677,6 +678,15 @@ function buildFurnitureTemplateParts({
         groupLabel,
       );
 
+    case "template_closet_wardrobe":
+      return createClosetWardrobeComponents(
+        originX,
+        originZ,
+        canvasH,
+        buildId,
+        groupLabel,
+      );
+
     default:
       return [];
   }
@@ -1300,4 +1310,5 @@ export {
   buildFurnitureTemplateParts,
   buildDiningChairParts,
   createImportedDiningChairComponents,
+  createClosetWardrobeComponents,
 };
