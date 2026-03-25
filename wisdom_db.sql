@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Mar 24, 2026 at 10:42 AM
+-- Generation Time: Mar 25, 2026 at 10:51 AM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.1.25
 
@@ -31,7 +31,9 @@ CREATE TABLE `appointments` (
   `id` int(11) NOT NULL,
   `order_id` int(11) DEFAULT NULL,
   `customer_id` int(11) DEFAULT NULL,
-  `assigned_to` int(11) DEFAULT NULL,
+  `handled_by` int(11) DEFAULT NULL,
+  `provider_id` int(11) DEFAULT NULL,
+  `request_owner_id` int(11) DEFAULT NULL,
   `purpose` varchar(200) DEFAULT NULL,
   `scheduled_date` datetime DEFAULT NULL,
   `preferred_date` datetime DEFAULT NULL,
@@ -44,9 +46,8 @@ CREATE TABLE `appointments` (
 -- Dumping data for table `appointments`
 --
 
-INSERT INTO `appointments` (`id`, `order_id`, `customer_id`, `assigned_to`, `purpose`, `scheduled_date`, `preferred_date`, `status`, `notes`, `updated_at`) VALUES
-(1, NULL, NULL, 5, 'consultation', '2026-03-20 22:11:00', '2026-03-20 22:11:00', 'pending', NULL, '2026-03-20 14:11:59'),
-(2, NULL, 7, NULL, 'Consult', '2026-03-25 08:00:00', '2026-03-25 00:00:00', 'pending', 'Contact: 09123456789', '2026-03-21 16:12:01');
+INSERT INTO `appointments` (`id`, `order_id`, `customer_id`, `handled_by`, `provider_id`, `request_owner_id`, `purpose`, `scheduled_date`, `preferred_date`, `status`, `notes`, `updated_at`) VALUES
+(7, NULL, 7, 5, 5, 5, 'consultation', '2026-03-27 08:00:00', '2026-03-27 08:00:00', 'done', 'Project Description: 123\nContact: 09123456789\nAddress: Sample Address\nCustomer Notes: 123', '2026-03-24 14:28:37');
 
 -- --------------------------------------------------------
 
@@ -419,7 +420,8 @@ INSERT INTO `orders` (`id`, `order_number`, `customer_id`, `walkin_customer_name
 (29, 'WLK-20260323-9289', NULL, 'jericho', '09530695310', 'walkin', 'standard', 'confirmed', 'cash', 'paid', 23000.00, 0.00, 0.00, 23000.00, NULL, 0.00, 0.00, NULL, NULL, NULL, NULL, NULL, NULL, 0.00, 'none', '2026-03-23 14:11:48', '2026-03-23 14:11:48'),
 (30, 'WLK-20260323-8594', NULL, 'Robin', '09530695310', 'walkin', 'standard', 'confirmed', 'cash', 'paid', 11500.00, 0.00, 0.00, 11500.00, NULL, 0.00, 0.00, NULL, NULL, NULL, NULL, NULL, NULL, 0.00, 'none', '2026-03-23 14:30:09', '2026-03-23 14:30:09'),
 (34, 'WLK-20260323-8541', NULL, '123', '09812371222', 'walkin', 'standard', 'confirmed', 'cash', 'paid', 11500.00, 0.00, 0.00, 11500.00, NULL, 0.00, 0.00, NULL, NULL, NULL, NULL, NULL, NULL, 0.00, 'none', '2026-03-23 14:41:04', '2026-03-23 14:41:04'),
-(35, 'SWS-20260323-6120', 7, 'Sample Customer', '09123456789', 'online', 'standard', 'pending', 'cod', 'unpaid', 8500.00, 0.00, 0.00, 8500.00, NULL, 0.00, 0.00, NULL, 'Sample Address', '', NULL, NULL, NULL, 0.00, 'none', '2026-03-23 15:03:13', '2026-03-23 15:03:13');
+(35, 'SWS-20260323-6120', 7, 'Sample Customer', '09123456789', 'online', 'standard', 'pending', 'cod', 'unpaid', 8500.00, 0.00, 0.00, 8500.00, NULL, 0.00, 0.00, NULL, 'Sample Address', '', NULL, NULL, NULL, 0.00, 'none', '2026-03-23 15:03:13', '2026-03-23 15:03:13'),
+(36, 'WLK-20260324-5232', NULL, 'Rica', '09530695310', 'walkin', 'standard', 'confirmed', 'cash', 'paid', 8500.00, 0.00, 20.00, 8480.00, NULL, 0.00, 0.00, NULL, NULL, NULL, NULL, NULL, NULL, 0.00, 'none', '2026-03-24 11:44:40', '2026-03-24 11:44:40');
 
 -- --------------------------------------------------------
 
@@ -482,7 +484,8 @@ INSERT INTO `order_items` (`id`, `order_id`, `product_id`, `variation_id`, `prod
 (35, 29, 9, NULL, 'POS Test Cabinet Medium', 2, 11500.00, 6800.00),
 (36, 30, 9, NULL, 'POS Test Cabinet Medium', 1, 11500.00, 6800.00),
 (40, 34, 9, NULL, 'POS Test Cabinet Medium', 1, 11500.00, 6800.00),
-(41, 35, 5, NULL, 'Classic Oak Cabinet', 1, 8500.00, NULL);
+(41, 35, 5, NULL, 'Classic Oak Cabinet', 1, 8500.00, NULL),
+(42, 36, 5, NULL, 'Classic Oak Cabinet', 1, 8500.00, 4200.00);
 
 -- --------------------------------------------------------
 
@@ -547,7 +550,8 @@ INSERT INTO `payment_transactions` (`id`, `order_id`, `amount`, `payment_method`
 (22, 27, 32500.00, 'cash', NULL, 5, '2026-03-22 18:02:44', 'verified', NULL, '2026-03-22 10:02:44'),
 (23, 29, 23000.00, 'cash', NULL, 5, '2026-03-23 22:11:48', 'verified', NULL, '2026-03-23 14:11:48'),
 (24, 30, 11500.00, 'cash', NULL, 5, '2026-03-23 22:30:09', 'verified', NULL, '2026-03-23 14:30:09'),
-(28, 34, 11500.00, 'cash', NULL, 5, '2026-03-23 22:41:04', 'verified', NULL, '2026-03-23 14:41:04');
+(28, 34, 11500.00, 'cash', NULL, 5, '2026-03-23 22:41:04', 'verified', NULL, '2026-03-23 14:41:04'),
+(29, 36, 8480.00, 'cash', NULL, 5, '2026-03-24 19:44:40', 'verified', NULL, '2026-03-24 11:44:40');
 
 -- --------------------------------------------------------
 
@@ -580,7 +584,7 @@ CREATE TABLE `products` (
 --
 
 INSERT INTO `products` (`id`, `barcode`, `name`, `description`, `category_id`, `type`, `image_url`, `is_featured`, `online_price`, `walkin_price`, `production_cost`, `stock`, `reorder_point`, `stock_status`, `created_at`, `updated_at`) VALUES
-(5, NULL, 'Classic Oak Cabinet', 'A sturdy and elegant oak wood cabinet with 3 shelves and smooth finish. Perfect for living rooms and offices.', 1, 'standard', 'uploads/products/cabinet-oak.jpeg', 1, 8500.00, 8500.00, 4200.00, 10, 5, 'in_stock', '2026-03-10 15:16:41', '2026-03-23 15:03:13'),
+(5, NULL, 'Classic Oak Cabinet', 'A sturdy and elegant oak wood cabinet with 3 shelves and smooth finish. Perfect for living rooms and offices.', 1, 'standard', 'uploads/products/cabinet-oak.jpeg', 1, 8500.00, 8500.00, 4200.00, 9, 5, 'in_stock', '2026-03-10 15:16:41', '2026-03-24 11:44:40'),
 (6, NULL, 'Modern Walnut Cabinet', 'Sleek modern design walnut cabinet with soft-close doors and adjustable shelving. Ideal for bedrooms.', 1, 'standard', 'uploads/products/cabinet-walnut.jpeg', 1, 12500.00, 12500.00, 6800.00, 8, 5, 'in_stock', '2026-03-10 15:16:41', '2026-03-22 16:50:59'),
 (7, NULL, 'Rustic Pine Cabinet', 'Handcrafted rustic pine wood cabinet with vintage hardware. Adds a warm natural feel to any room.', 1, 'standard', 'uploads/products/cabinet-pine.jpeg', 0, 6800.00, 6800.00, 3500.00, 0, 5, 'out_of_stock', '2026-03-10 15:16:41', '2026-03-20 14:02:41'),
 (8, 'WDM-CAB-1001', 'POS Test Cabinet Small', 'Sample cabinet product for POS testing.', 1, 'standard', NULL, 0, 8500.00, 8500.00, 4800.00, 0, 5, 'out_of_stock', '2026-03-20 04:19:32', '2026-03-20 13:40:05'),
@@ -605,6 +609,37 @@ CREATE TABLE `product_variations` (
   `stock` int(11) DEFAULT 0,
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `project_tasks`
+--
+
+CREATE TABLE `project_tasks` (
+  `id` int(11) NOT NULL,
+  `order_id` int(11) DEFAULT NULL,
+  `blueprint_id` int(11) DEFAULT NULL,
+  `assigned_to` int(11) NOT NULL,
+  `assigned_by` int(11) NOT NULL,
+  `task_role` enum('Cabinet Maker','Installer','Delivery Personnel','Quality Inspector','Other') DEFAULT 'Other',
+  `title` varchar(200) NOT NULL,
+  `description` text DEFAULT NULL,
+  `accepted_at` datetime DEFAULT NULL,
+  `status` enum('pending','in_progress','completed','blocked') DEFAULT 'pending',
+  `is_read` tinyint(1) DEFAULT 0,
+  `due_date` datetime DEFAULT NULL,
+  `completed_at` datetime DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `project_tasks`
+--
+
+INSERT INTO `project_tasks` (`id`, `order_id`, `blueprint_id`, `assigned_to`, `assigned_by`, `task_role`, `title`, `description`, `accepted_at`, `status`, `is_read`, `due_date`, `completed_at`, `created_at`, `updated_at`) VALUES
+(1, NULL, NULL, 5, 1, 'Cabinet Maker', 'Sample Task Assignment', 'Test task para lumabas sa Task Assignments page.', NULL, 'pending', 0, '2026-03-27 17:32:44', NULL, '2026-03-25 09:32:44', '2026-03-25 09:32:44');
 
 -- --------------------------------------------------------
 
@@ -683,7 +718,8 @@ INSERT INTO `receipts` (`id`, `order_id`, `receipt_number`, `issued_to`, `issued
 (22, 27, 'OR-1774173764512', 'aquino', 5, 32500.00, NULL, NULL, '[{\"product_id\":5,\"variation_id\":null,\"product_name\":\"Classic Oak Cabinet\",\"quantity\":1,\"unit_price\":8500,\"production_cost\":4200},{\"product_id\":6,\"variation_id\":null,\"product_name\":\"Modern Walnut Cabinet\",\"quantity\":1,\"unit_price\":12500,\"production_cost\":6800},{\"product_id\":9,\"variation_id\":null,\"product_name\":\"POS Test Cabinet Medium\",\"quantity\":1,\"unit_price\":11500,\"production_cost\":6800}]', NULL, '2026-03-22 18:02:44', '2026-03-22 10:02:44'),
 (23, 29, 'OR-1774275108546', 'jericho', 5, 23000.00, NULL, NULL, '[{\"key\":\"9\",\"product_id\":9,\"variation_id\":null,\"product_name\":\"POS Test Cabinet Medium\",\"unit_price\":11500,\"production_cost\":6800,\"quantity\":2,\"max_stock\":4}]', NULL, '2026-03-23 22:11:48', '2026-03-23 14:11:48'),
 (24, 30, 'OR-1774276209811', 'Robin', 5, 11500.00, NULL, NULL, '[{\"key\":\"9\",\"product_id\":9,\"variation_id\":null,\"product_name\":\"POS Test Cabinet Medium\",\"unit_price\":11500,\"production_cost\":6800,\"quantity\":1,\"max_stock\":2}]', NULL, '2026-03-23 22:30:09', '2026-03-23 14:30:09'),
-(25, 34, 'OR-1774276864239', '123', 5, 11500.00, 12311.00, 811.00, '[{\"key\":\"9\",\"product_id\":9,\"variation_id\":null,\"product_name\":\"POS Test Cabinet Medium\",\"unit_price\":11500,\"production_cost\":6800,\"quantity\":1,\"max_stock\":1}]', NULL, '2026-03-23 22:41:04', '2026-03-23 14:41:04');
+(25, 34, 'OR-1774276864239', '123', 5, 11500.00, 12311.00, 811.00, '[{\"key\":\"9\",\"product_id\":9,\"variation_id\":null,\"product_name\":\"POS Test Cabinet Medium\",\"unit_price\":11500,\"production_cost\":6800,\"quantity\":1,\"max_stock\":1}]', NULL, '2026-03-23 22:41:04', '2026-03-23 14:41:04'),
+(26, 36, 'OR-1774352680794', 'Rica', 5, 8480.00, 10000.00, 3200.00, '[{\"key\":\"5\",\"product_id\":5,\"variation_id\":null,\"product_name\":\"Classic Oak Cabinet\",\"unit_price\":8500,\"production_cost\":4200,\"quantity\":1,\"max_stock\":10}]', NULL, '2026-03-24 19:44:40', '2026-03-24 11:44:40');
 
 -- --------------------------------------------------------
 
@@ -765,7 +801,8 @@ INSERT INTO `stock_movements` (`id`, `material_id`, `product_id`, `type`, `quant
 (27, NULL, 9, 'out', 1.00, NULL, 27, 32, NULL, 'POS walk-in sale', 5, '2026-03-22 10:02:44'),
 (28, NULL, 9, 'out', 2.00, NULL, 29, 35, NULL, 'POS walk-in sale', 5, '2026-03-23 14:11:48'),
 (29, NULL, 9, 'out', 1.00, NULL, 30, 36, NULL, 'POS walk-in sale', 5, '2026-03-23 14:30:09'),
-(33, NULL, 9, 'out', 1.00, NULL, 34, 40, NULL, 'POS walk-in sale', 5, '2026-03-23 14:41:04');
+(33, NULL, 9, 'out', 1.00, NULL, 34, 40, NULL, 'POS walk-in sale', 5, '2026-03-23 14:41:04'),
+(34, NULL, 5, 'out', 1.00, NULL, 36, 42, NULL, 'POS walk-in sale', 5, '2026-03-24 11:44:40');
 
 -- --------------------------------------------------------
 
@@ -816,23 +853,23 @@ CREATE TABLE `users` (
   `is_active` tinyint(1) DEFAULT 1,
   `last_login` datetime DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `reset_otp` varchar(6) DEFAULT NULL,
+  `reset_otp_expires` datetime DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Dumping data for table `users`
 --
 
-INSERT INTO `users` (`id`, `name`, `email`, `pending_email`, `password`, `role`, `phone`, `pending_phone`, `address`, `profile_photo`, `is_verified`, `otp_code`, `otp_expires`, `approval_status`, `approved_by`, `approved_at`, `is_active`, `last_login`, `created_at`, `updated_at`) VALUES
-(1, 'Administrator', 'admin@spiralwood.com', NULL, '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMaX.6IrqJXnq0RbbvO9rGDH9i', 'admin', NULL, NULL, NULL, NULL, 1, NULL, NULL, 'approved', NULL, NULL, 1, NULL, '2026-03-04 14:25:19', '2026-03-04 14:25:19'),
-(2, 'Robin Nicolas', 'robinnicolas032@gmail.com', NULL, '$2a$12$nOzbbfn7HNKmkjCRPikLEePxckfvgPJ6UHpejZPrNyHPSJvjXleou', 'customer', '09766574817', NULL, 'PDM, Marilao, Bulacan', NULL, 1, NULL, NULL, 'pending', NULL, NULL, 1, NULL, '2026-03-09 11:11:58', '2026-03-09 11:12:20'),
-(3, 'John Marc Aquino', 'jmaquino@gmail.com', NULL, '$2a$12$yhvBW8VoieXCf./eIV66LuZABGJL/6QJkX6bp8lt7XQycIlaUm7V6', 'customer', '09766574817', NULL, 'PDM, Marilao, Bulacan', NULL, 0, '643057', '2026-03-09 20:13:47', 'pending', NULL, NULL, 1, NULL, '2026-03-09 11:58:47', '2026-03-09 11:58:47'),
-(4, 'John Marc Aquino', 'baluktottite7@gmail.com', NULL, '$2a$12$RwUTafjoROc5lNgwUxQX7.tI3BC5tyP9sbfYwVg.m.KoKg7a4VftK', 'customer', '09934391473', NULL, 'PDM, Marilao, Bulacan', NULL, 1, NULL, NULL, 'approved', NULL, NULL, 1, '2026-03-12 21:39:26', '2026-03-09 11:59:07', '2026-03-12 13:39:26'),
-(5, 'Staff User', 'staff@gmail.com', NULL, '$2y$12$vg4yYX47in9fGBJn5OLbre7SjN7dEnIB2jFh1Fr1HWOFveVcYSTJO', 'staff', '09123456789', NULL, 'Sample Address', NULL, 1, NULL, NULL, 'approved', NULL, '2026-03-19 17:52:02', 1, '2026-03-24 17:29:39', '2026-03-19 09:52:02', '2026-03-24 09:29:39'),
-(6, 'Admin 3', 'admin3@spiralwood.com', NULL, '$2y$12$XeynMMy8.vDVDtErjY4VZOZ9VRhwwQSrNFPCgSpRNptvW.asvFDW.', 'admin', NULL, NULL, NULL, NULL, 1, NULL, NULL, 'approved', NULL, NULL, 1, '2026-03-22 21:01:23', '2026-03-21 14:45:09', '2026-03-22 13:01:23'),
-(7, 'Sample Customer', 'samplecustomer@gmail.com', NULL, '$2y$12$O8fiAQK3P2G6.rEA.w8wdeQNvI8S.FcfquReFzXga38VJ0zCMR1QO', 'customer', '09123456789', NULL, 'Sample Address', NULL, 1, NULL, NULL, 'approved', NULL, '2026-03-22 00:00:14', 1, '2026-03-24 17:29:16', '2026-03-21 15:42:26', '2026-03-24 09:29:16'),
-(8, 'Jericho Flores', 'zanenatsuki@gmail.com', NULL, '$2a$12$VflPpz4KukDepxXCjh0bJep0FTOO0zO7WNG4YSnnnMRjCm/gpamIG', 'customer', '09530695320', NULL, 'Saog Marilao Bulacan', NULL, 0, '925787', '2026-03-21 23:59:16', 'pending', NULL, NULL, 1, NULL, '2026-03-21 15:44:16', '2026-03-21 15:44:16'),
-(9, 'Jericho Flores', 'jerichoflores@gmail.com', NULL, '$2a$12$u4slMewEweGb5Uxn6Zw0oO7LwDH/4N2Kc3s.AEKd6RpH4TjEeheFu', 'customer', '0953065320', NULL, 'Saog Marilao', NULL, 0, '943851', '2026-03-22 00:12:59', 'rejected', 6, '2026-03-23 00:30:38', 1, NULL, '2026-03-21 15:57:59', '2026-03-22 16:30:38');
+INSERT INTO `users` (`id`, `name`, `email`, `pending_email`, `password`, `role`, `phone`, `pending_phone`, `address`, `profile_photo`, `is_verified`, `otp_code`, `otp_expires`, `approval_status`, `approved_by`, `approved_at`, `is_active`, `last_login`, `created_at`, `updated_at`, `reset_otp`, `reset_otp_expires`) VALUES
+(1, 'Administrator', 'admin@spiralwood.com', NULL, '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMaX.6IrqJXnq0RbbvO9rGDH9i', 'admin', NULL, NULL, NULL, NULL, 1, NULL, NULL, 'approved', NULL, NULL, 1, NULL, '2026-03-04 14:25:19', '2026-03-04 14:25:19', NULL, NULL),
+(2, 'Robin Nicolas', 'robinnicolas032@gmail.com', NULL, '$2a$12$nOzbbfn7HNKmkjCRPikLEePxckfvgPJ6UHpejZPrNyHPSJvjXleou', 'customer', '09766574817', NULL, 'PDM, Marilao, Bulacan', NULL, 1, NULL, NULL, 'approved', NULL, NULL, 1, NULL, '2026-03-09 11:11:58', '2026-03-24 14:59:00', NULL, NULL),
+(3, 'John Marc Aquino', 'jmaquino@gmail.com', NULL, '$2a$12$yhvBW8VoieXCf./eIV66LuZABGJL/6QJkX6bp8lt7XQycIlaUm7V6', 'customer', '09766574817', NULL, 'PDM, Marilao, Bulacan', NULL, 0, '643057', '2026-03-09 20:13:47', 'approved', NULL, NULL, 1, NULL, '2026-03-09 11:58:47', '2026-03-24 14:59:00', NULL, NULL),
+(4, 'John Marc Aquino', 'baluktottite7@gmail.com', NULL, '$2a$12$RwUTafjoROc5lNgwUxQX7.tI3BC5tyP9sbfYwVg.m.KoKg7a4VftK', 'customer', '09934391473', NULL, 'PDM, Marilao, Bulacan', NULL, 1, NULL, NULL, 'approved', NULL, NULL, 1, '2026-03-12 21:39:26', '2026-03-09 11:59:07', '2026-03-12 13:39:26', NULL, NULL),
+(5, 'Staff User', 'staff@gmail.com', NULL, '$2y$12$vg4yYX47in9fGBJn5OLbre7SjN7dEnIB2jFh1Fr1HWOFveVcYSTJO', 'staff', '09123456789', NULL, 'Sample Address', NULL, 1, NULL, NULL, 'approved', NULL, '2026-03-19 17:52:02', 1, '2026-03-24 22:23:23', '2026-03-19 09:52:02', '2026-03-24 14:23:23', NULL, NULL),
+(6, 'Admin 3', 'admin3@spiralwood.com', NULL, '$2y$12$XeynMMy8.vDVDtErjY4VZOZ9VRhwwQSrNFPCgSpRNptvW.asvFDW.', 'admin', NULL, NULL, NULL, NULL, 1, NULL, NULL, 'approved', NULL, NULL, 1, '2026-03-25 17:12:21', '2026-03-21 14:45:09', '2026-03-25 09:12:21', NULL, NULL),
+(7, 'Sample Customer', 'samplecustomer@gmail.com', NULL, '$2y$12$O8fiAQK3P2G6.rEA.w8wdeQNvI8S.FcfquReFzXga38VJ0zCMR1QO', 'customer', '09123456789', NULL, 'Sample Address', NULL, 1, NULL, NULL, 'approved', NULL, '2026-03-22 00:00:14', 1, '2026-03-24 22:24:44', '2026-03-21 15:42:26', '2026-03-24 14:24:44', NULL, NULL);
 
 -- --------------------------------------------------------
 
@@ -919,7 +956,7 @@ INSERT INTO `website_settings` (`id`, `setting_key`, `value`, `group_name`, `upd
 ALTER TABLE `appointments`
   ADD PRIMARY KEY (`id`),
   ADD KEY `order_id` (`order_id`),
-  ADD KEY `assigned_to` (`assigned_to`),
+  ADD KEY `assigned_to` (`request_owner_id`),
   ADD KEY `idx_appointments_customer` (`customer_id`);
 
 --
@@ -1080,6 +1117,16 @@ ALTER TABLE `product_variations`
   ADD KEY `product_id` (`product_id`);
 
 --
+-- Indexes for table `project_tasks`
+--
+ALTER TABLE `project_tasks`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_project_tasks_order_id` (`order_id`),
+  ADD KEY `idx_project_tasks_blueprint_id` (`blueprint_id`),
+  ADD KEY `idx_project_tasks_assigned_to` (`assigned_to`),
+  ADD KEY `idx_project_tasks_assigned_by` (`assigned_by`);
+
+--
 -- Indexes for table `raw_materials`
 --
 ALTER TABLE `raw_materials`
@@ -1161,7 +1208,7 @@ ALTER TABLE `website_settings`
 -- AUTO_INCREMENT for table `appointments`
 --
 ALTER TABLE `appointments`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
 
 --
 -- AUTO_INCREMENT for table `audit_logs`
@@ -1251,13 +1298,13 @@ ALTER TABLE `notifications`
 -- AUTO_INCREMENT for table `orders`
 --
 ALTER TABLE `orders`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=36;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=37;
 
 --
 -- AUTO_INCREMENT for table `order_items`
 --
 ALTER TABLE `order_items`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=42;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=43;
 
 --
 -- AUTO_INCREMENT for table `password_resets`
@@ -1269,7 +1316,7 @@ ALTER TABLE `password_resets`
 -- AUTO_INCREMENT for table `payment_transactions`
 --
 ALTER TABLE `payment_transactions`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=29;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=30;
 
 --
 -- AUTO_INCREMENT for table `products`
@@ -1284,6 +1331,12 @@ ALTER TABLE `product_variations`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
+-- AUTO_INCREMENT for table `project_tasks`
+--
+ALTER TABLE `project_tasks`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+
+--
 -- AUTO_INCREMENT for table `raw_materials`
 --
 ALTER TABLE `raw_materials`
@@ -1293,7 +1346,7 @@ ALTER TABLE `raw_materials`
 -- AUTO_INCREMENT for table `receipts`
 --
 ALTER TABLE `receipts`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=26;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=27;
 
 --
 -- AUTO_INCREMENT for table `static_pages`
@@ -1305,7 +1358,7 @@ ALTER TABLE `static_pages`
 -- AUTO_INCREMENT for table `stock_movements`
 --
 ALTER TABLE `stock_movements`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=34;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=35;
 
 --
 -- AUTO_INCREMENT for table `suppliers`
@@ -1317,7 +1370,7 @@ ALTER TABLE `suppliers`
 -- AUTO_INCREMENT for table `users`
 --
 ALTER TABLE `users`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=15;
 
 --
 -- AUTO_INCREMENT for table `user_sessions`
@@ -1346,7 +1399,7 @@ ALTER TABLE `website_settings`
 --
 ALTER TABLE `appointments`
   ADD CONSTRAINT `appointments_ibfk_1` FOREIGN KEY (`order_id`) REFERENCES `orders` (`id`),
-  ADD CONSTRAINT `appointments_ibfk_2` FOREIGN KEY (`assigned_to`) REFERENCES `users` (`id`);
+  ADD CONSTRAINT `appointments_ibfk_2` FOREIGN KEY (`request_owner_id`) REFERENCES `users` (`id`);
 
 --
 -- Constraints for table `audit_logs`
@@ -1477,6 +1530,15 @@ ALTER TABLE `products`
 --
 ALTER TABLE `product_variations`
   ADD CONSTRAINT `product_variations_ibfk_1` FOREIGN KEY (`product_id`) REFERENCES `products` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `project_tasks`
+--
+ALTER TABLE `project_tasks`
+  ADD CONSTRAINT `fk_project_tasks_assigned_by` FOREIGN KEY (`assigned_by`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  ADD CONSTRAINT `fk_project_tasks_assigned_to` FOREIGN KEY (`assigned_to`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  ADD CONSTRAINT `fk_project_tasks_blueprint` FOREIGN KEY (`blueprint_id`) REFERENCES `blueprints` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
+  ADD CONSTRAINT `fk_project_tasks_order` FOREIGN KEY (`order_id`) REFERENCES `orders` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 --
 -- Constraints for table `raw_materials`
