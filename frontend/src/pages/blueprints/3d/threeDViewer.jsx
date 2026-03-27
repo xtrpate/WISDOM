@@ -196,6 +196,7 @@ function Floating3DPalette({ onAdd, activeBuildLabel }) {
 
 function Floating3DInspector({
   selectedComp,
+  selectedIds = [],
   isLocked,
   onChange,
   unit,
@@ -206,6 +207,12 @@ function Floating3DInspector({
   const handleNumericChange = (key) => (e) => {
     onChange(selectedComp.id, {
       [key]: displayToMm(e.target.value, unit),
+    });
+  };
+
+  const applyStyleChange = (attrs) => {
+    onChange(selectedComp.id, attrs, {
+      applyToSelection: selectedIds.length > 1,
     });
   };
 
@@ -356,8 +363,8 @@ function Floating3DInspector({
           type="color"
           value={selectedComp.fill || "#d9c2a5"}
           disabled={editorMode !== "editable" || isLocked(selectedComp)}
-          onChange={(e) =>
-            onChange(selectedComp.id, {
+             onChange={(e) =>
+            applyStyleChange({
               fill: e.target.value,
               finish: "",
             })
@@ -376,7 +383,7 @@ function Floating3DInspector({
           value={selectedComp.material || ""}
           disabled={editorMode !== "editable" || isLocked(selectedComp)}
           onChange={(e) =>
-            onChange(selectedComp.id, { material: e.target.value })
+            applyStyleChange({ material: e.target.value })
           }
           style={S.floatingInput}
         />
@@ -390,8 +397,7 @@ function Floating3DInspector({
             value={selectedComp.finish ?? ""}
             disabled={editorMode !== "editable" || isLocked(selectedComp)}
             onChange={(e) =>
-              onChange(
-                selectedComp.id,
+              applyStyleChange(
                 applyWoodFinish(selectedComp, e.target.value),
               )
             }
@@ -502,6 +508,7 @@ function ThreeDViewer({
   setSelectedIds,
   setEdit3DId,
   onUpdateComp,
+  onBatchUpdateComps,
   lockedFields,
   canvasW,
   canvasH,
@@ -524,6 +531,8 @@ function ThreeDViewer({
   const orbitRef = useRef(null);
   const transformRef = useRef(null);
   const rootGroupRef = useRef(null);
+  const selectionPivotRef = useRef(null);
+  const multiTransformStateRef = useRef(null);
 
   const raycasterRef = useRef(new THREE.Raycaster());
   const mouseRef = useRef(new THREE.Vector2());
@@ -537,6 +546,7 @@ function ThreeDViewer({
   const selectedIdsRef = useRef(selectedIds || []);
 
   const onUpdateCompRef = useRef(onUpdateComp);
+  const onBatchUpdateCompsRef = useRef(onBatchUpdateComps);
   const setSelectedIdRef = useRef(setSelectedId);
   const setEdit3DIdRef = useRef(setEdit3DId);
   const setSelectedIdsRef = useRef(setSelectedIds);
@@ -641,6 +651,10 @@ function ThreeDViewer({
   }, [selectedId]);
 
   useEffect(() => {
+    selectedIdsRef.current = selectedIds || [];
+  }, [selectedIds]);
+
+  useEffect(() => {
     edit3DIdRef.current = edit3DId;
   }, [edit3DId]);
 
@@ -659,6 +673,10 @@ function ThreeDViewer({
   useEffect(() => {
     onUpdateCompRef.current = onUpdateComp;
   }, [onUpdateComp]);
+
+  useEffect(() => {
+    onBatchUpdateCompsRef.current = onBatchUpdateComps;
+  }, [onBatchUpdateComps]);
 
   useEffect(() => {
     setSelectedIdRef.current = setSelectedId;
@@ -706,6 +724,178 @@ function ThreeDViewer({
     }),
     [canvasW, canvasH, canvasD],
   );
+
+    const getActiveSelectionIds = useCallback(() => {
+    const ids = Array.from(new Set((selectedIdsRef.current || []).filter(Boolean)));
+    if (ids.length) return ids;
+    return selectedIdRef.current ? [selectedIdRef.current] : [];
+  }, []);
+
+  const getSelectionEntries = useCallback(
+    (ids = getActiveSelectionIds()) =>
+      ids
+        .map((id) => {
+          const entry = entryMapRef.current.get(id);
+          return entry ? { id, ...entry } : null;
+        })
+        .filter(Boolean),
+    [getActiveSelectionIds],
+  );
+
+  const applySelectionState = useCallback((ids = [], primaryId = null) => {
+    const nextIds = Array.from(new Set((ids || []).filter(Boolean)));
+    const nextPrimary =
+      primaryId && nextIds.includes(primaryId)
+        ? primaryId
+        : nextIds[nextIds.length - 1] || null;
+
+    selectedIdsRef.current = nextIds;
+    selectedIdRef.current = nextPrimary;
+    edit3DIdRef.current = nextPrimary;
+
+    setSelectedIdsRef.current?.(nextIds);
+    setSelectedIdRef.current?.(nextPrimary);
+    setEdit3DIdRef.current?.(nextPrimary);
+  }, []);
+
+  const ensureSelectionPivot = useCallback(() => {
+    const rootGroup = rootGroupRef.current;
+    if (!rootGroup?.parent) return null;
+
+    if (!selectionPivotRef.current) {
+      const pivot = new THREE.Group();
+      pivot.name = "multi-selection-pivot";
+      pivot.visible = false;
+      selectionPivotRef.current = pivot;
+    }
+
+    const pivot = selectionPivotRef.current;
+
+    if (pivot.parent !== rootGroup.parent) {
+      rootGroup.parent.add(pivot);
+    }
+
+    return pivot;
+  }, []);
+
+  const positionSelectionPivot = useCallback(
+    (ids = getActiveSelectionIds()) => {
+      const pivot = ensureSelectionPivot();
+      const entries = getSelectionEntries(ids);
+
+      if (!pivot || !entries.length) return null;
+
+      const box = new THREE.Box3();
+      entries.forEach(({ obj }) => box.expandByObject(obj));
+
+      const center = new THREE.Vector3();
+      box.getCenter(center);
+
+      pivot.position.copy(center);
+      pivot.rotation.set(0, 0, 0);
+      pivot.scale.set(1, 1, 1);
+      pivot.updateMatrixWorld(true);
+
+      return pivot;
+    },
+    [ensureSelectionPivot, getActiveSelectionIds, getSelectionEntries],
+  );
+
+  const resetMultiTransformState = useCallback(() => {
+    multiTransformStateRef.current = null;
+
+    const pivot = selectionPivotRef.current;
+    if (pivot) {
+      pivot.rotation.set(0, 0, 0);
+      pivot.scale.set(1, 1, 1);
+      pivot.updateMatrixWorld(true);
+    }
+  }, []);
+
+  const beginMultiTransform = useCallback(
+    (ids = getActiveSelectionIds()) => {
+      if (ids.length < 2) {
+        multiTransformStateRef.current = null;
+        return;
+      }
+
+      const pivot = positionSelectionPivot(ids);
+      const entries = getSelectionEntries(ids);
+
+      if (!pivot || entries.length < 2) return;
+
+      pivot.updateMatrixWorld(true);
+
+      multiTransformStateRef.current = {
+        ids,
+        startPivotMatrix: pivot.matrixWorld.clone(),
+        startPivotInverse: pivot.matrixWorld.clone().invert(),
+        items: entries.map(({ id, obj, comp }) => ({
+          id,
+          obj,
+          comp,
+          position: obj.position.clone(),
+          quaternion: obj.quaternion.clone(),
+          scale: obj.scale.clone(),
+        })),
+      };
+    },
+    [getActiveSelectionIds, getSelectionEntries, positionSelectionPivot],
+  );
+
+  const previewMultiTransform = useCallback(() => {
+    const state = multiTransformStateRef.current;
+    const pivot = selectionPivotRef.current;
+
+    if (!state || !pivot) return;
+
+    pivot.updateMatrixWorld(true);
+
+    const deltaMatrix = pivot.matrixWorld
+      .clone()
+      .multiply(state.startPivotInverse);
+
+    const nextMatrix = new THREE.Matrix4();
+    const position = new THREE.Vector3();
+    const quaternion = new THREE.Quaternion();
+    const scale = new THREE.Vector3();
+
+    state.items.forEach((item) => {
+      const baseMatrix = new THREE.Matrix4().compose(
+        item.position.clone(),
+        item.quaternion.clone(),
+        item.scale.clone(),
+      );
+
+      nextMatrix.copy(deltaMatrix).multiply(baseMatrix);
+      nextMatrix.decompose(position, quaternion, scale);
+
+      item.obj.position.copy(position);
+      item.obj.quaternion.copy(quaternion);
+      item.obj.scale.copy(scale);
+      item.obj.updateMatrixWorld(true);
+    });
+  }, []);
+
+  const commitMultiTransform = useCallback(() => {
+    const state = multiTransformStateRef.current;
+    if (!state?.items?.length) return;
+
+    const updatesById = {};
+
+    state.items.forEach((item) => {
+      updatesById[item.id] = compFromWorld(item.obj, item.comp);
+      item.obj.scale.set(1, 1, 1);
+    });
+
+    if (onBeforeDragRef.current) {
+      onPushHistoryRef.current?.(onBeforeDragRef.current);
+      onBeforeDragRef.current = null;
+    }
+
+    onBatchUpdateCompsRef.current?.(updatesById, { skipHistory: true });
+    resetMultiTransformState();
+  }, [compFromWorld, resetMultiTransformState]);
 
   const captureCameraView = useCallback(() => {
     const camera = cameraRef.current;
@@ -917,26 +1107,58 @@ function ThreeDViewer({
     });
   }, [preserveCameraView, applyTransformModeRaw]);
 
-  const attachSelectedRaw = useCallback(() => {
+    const attachSelectedRaw = useCallback(() => {
     const transform = transformRef.current;
     if (!transform) return;
 
-    const currentSelectedId = selectedIdRef.current;
-    const currentEdit3DId = edit3DIdRef.current;
-    const entry = entryMapRef.current.get(currentSelectedId);
+    const activeIds = getActiveSelectionIds();
 
-    if (
-      editorMode === "editable" &&
-      entry &&
-      !isLocked3DRef.current(entry.comp) &&
-      currentEdit3DId === currentSelectedId
-    ) {
-      transform.attach(entry.obj);
+    if (editorMode !== "editable" || !activeIds.length) {
+      resetMultiTransformState();
+      transform.detach();
+      return;
+    }
+
+    const entries = getSelectionEntries(activeIds).filter(
+      ({ comp }) => !isLocked3DRef.current(comp),
+    );
+
+    if (!entries.length) {
+      resetMultiTransformState();
+      transform.detach();
+      return;
+    }
+
+    if (entries.length > 1) {
+      const pivot = positionSelectionPivot(entries.map((entry) => entry.id));
+      if (pivot) {
+        resetMultiTransformState();
+        transform.attach(pivot);
+        applyTransformModeRaw();
+        return;
+      }
+    }
+
+    const primaryEntry =
+      entries.find((entry) => entry.id === selectedIdRef.current) || entries[0];
+    const currentEdit3DId = edit3DIdRef.current;
+
+    if (primaryEntry && currentEdit3DId === primaryEntry.id) {
+      resetMultiTransformState();
+      transform.attach(primaryEntry.obj);
       applyTransformModeRaw();
     } else {
+      resetMultiTransformState();
       transform.detach();
     }
-  }, [applyTransformModeRaw]);
+  }, [
+    editorMode,
+    getActiveSelectionIds,
+    getSelectionEntries,
+    positionSelectionPivot,
+    resetMultiTransformState,
+    applyTransformModeRaw,
+  ]);
 
   const attachSelected = useCallback(() => {
     preserveCameraView(() => {
@@ -1228,17 +1450,31 @@ function ThreeDViewer({
       return hits[0] || null;
     };
 
-    const onDraggingChanged = (event) => {
+        const onDraggingChanged = (event) => {
       orbit.enabled = !event.value;
 
+      const activeIds = getActiveSelectionIds();
+      const isMultiTransform =
+        activeIds.length > 1 && transform.object === selectionPivotRef.current;
+
       if (event.value) {
-        // drag START — snapshot before the move
         onBeforeDragRef.current = componentsRef.current
           ? [...componentsRef.current]
           : null;
+
+        if (isMultiTransform) {
+          beginMultiTransform(activeIds);
+        }
       }
 
       if (!event.value) {
+        if (isMultiTransform) {
+          commitMultiTransform();
+          attachSelectedRaw();
+          storeCameraView();
+          return;
+        }
+
         const currentId = selectedIdRef.current;
         if (!currentId) return;
         const entry = entryMapRef.current.get(currentId);
@@ -1246,12 +1482,19 @@ function ThreeDViewer({
 
         const updates = compFromWorld(entry.obj, entry.comp);
         if (onBeforeDragRef.current) {
-          onPushHistoryRef.current?.(onBeforeDragRef.current); // ← push the pre-drag state
+          onPushHistoryRef.current?.(onBeforeDragRef.current);
           onBeforeDragRef.current = null;
         }
         onUpdateCompRef.current(currentId, updates);
         entry.obj.scale.set(1, 1, 1);
         storeCameraView();
+      }
+    };
+
+    const onTransformObjectChange = () => {
+      if (!transform.dragging) return;
+      if (transform.object === selectionPivotRef.current) {
+        previewMultiTransform();
       }
     };
 
@@ -1261,9 +1504,8 @@ function ThreeDViewer({
       const hit = pickMesh(e);
 
       if (!hit?.object?.userData?.rootId) {
-        setSelectedIdRef.current(null);
-        setSelectedIds([]); // Clear multi-selection
-        setEdit3DIdRef.current(null);
+        applySelectionState([], null);
+        resetMultiTransformState();
         transform.detach();
         storeCameraView();
         return;
@@ -1275,38 +1517,23 @@ function ThreeDViewer({
 
       preserveCameraView(() => {
         if (e.shiftKey) {
-          // --- MULTI-SELECTION LOGIC (SHIFT+CLICK) ---
-          const currentMulti = [...selectedIdsRef.current];
-          const primary = selectedIdRef.current;
-          const activeSet = new Set(
-            currentMulti.length ? currentMulti : primary ? [primary] : [],
-          );
+          const activeSet = new Set(getActiveSelectionIds());
 
           if (activeSet.has(hitId)) {
-            activeSet.delete(hitId); // Toggle off if already selected
+            activeSet.delete(hitId);
           } else {
-            activeSet.add(hitId); // Toggle on
+            activeSet.add(hitId);
           }
 
           const newArr = Array.from(activeSet);
-          const newPrimary = newArr[newArr.length - 1] || null; // The last clicked item gets the gizmo
+          const newPrimary = newArr[newArr.length - 1] || null;
 
-          setSelectedIdRef.current(newPrimary);
-          setSelectedIds(newArr); // Pass the array of IDs up to BlueprintDesign
-          setEdit3DIdRef.current(newPrimary);
-
-          if (newPrimary) {
-            transform.attach(entryMapRef.current.get(newPrimary).obj);
-          } else {
-            transform.detach();
-          }
+          applySelectionState(newArr, newPrimary);
         } else {
-          // --- SINGLE SELECTION LOGIC ---
-          setSelectedIdRef.current(hitId);
-          setSelectedIds([hitId]);
-          setEdit3DIdRef.current(hitId);
-          transform.attach(entry.obj);
+          applySelectionState([hitId], hitId);
         }
+
+        attachSelectedRaw();
         applyTransformModeRaw();
       });
 
@@ -1317,9 +1544,8 @@ function ThreeDViewer({
       const hit = pickMesh(e);
 
       if (!hit?.object?.userData?.rootId) {
-        setSelectedIdRef.current(null);
-        setSelectedIds([]);
-        setEdit3DIdRef.current(null);
+        applySelectionState([], null);
+        resetMultiTransformState();
         transform.detach();
         storeCameraView();
         return;
@@ -1330,10 +1556,8 @@ function ThreeDViewer({
       if (!entry || isLocked3DRef.current(entry.comp)) return;
 
       preserveCameraView(() => {
-        setSelectedIdRef.current(hitId);
-        setSelectedIds([]);
-        setEdit3DIdRef.current(hitId);
-        transform.attach(entry.obj);
+        applySelectionState([hitId], hitId);
+        attachSelectedRaw();
         applyTransformModeRaw();
       });
 
@@ -1356,6 +1580,7 @@ function ThreeDViewer({
     };
 
     transform.addEventListener("dragging-changed", onDraggingChanged);
+    transform.addEventListener("objectChange", onTransformObjectChange);
     orbit.addEventListener("change", onOrbitChange);
     renderer.domElement.addEventListener("pointerdown", onPointerDown);
     renderer.domElement.addEventListener("dblclick", onDoubleClick);
@@ -1385,6 +1610,7 @@ function ThreeDViewer({
       if (restoreRafRef.current) cancelAnimationFrame(restoreRafRef.current);
 
       transform.removeEventListener("dragging-changed", onDraggingChanged);
+      transform.removeEventListener("objectChange", onTransformObjectChange);
       orbit.removeEventListener("change", onOrbitChange);
       renderer.domElement.removeEventListener("pointerdown", onPointerDown);
       renderer.domElement.removeEventListener("dblclick", onDoubleClick);
@@ -1414,6 +1640,11 @@ function ThreeDViewer({
         }
       });
 
+      const pivot = selectionPivotRef.current;
+      if (pivot?.parent) {
+        pivot.parent.remove(pivot);
+      }
+
       renderer.dispose();
       if (mount.contains(renderer.domElement))
         mount.removeChild(renderer.domElement);
@@ -1434,24 +1665,8 @@ function ThreeDViewer({
 
   useEffect(() => {
     applyTransformMode();
-
-    const transform = transformRef.current;
-    if (!transform) return;
-
-    const currentSelectedId = selectedIdRef.current;
-    const currentEdit3DId = edit3DIdRef.current;
-    const entry = entryMapRef.current.get(currentSelectedId);
-
-    if (
-      entry &&
-      currentEdit3DId === currentSelectedId &&
-      !isLocked3DRef.current(entry.comp)
-    ) {
-      preserveCameraView(() => {
-        transform.attach(entry.obj);
-      });
-    }
-  }, [transformMode, applyTransformMode, preserveCameraView]);
+    attachSelected();
+  }, [transformMode, applyTransformMode, attachSelected]);
 
   useEffect(() => {
     rebuildObjects();
@@ -1459,7 +1674,7 @@ function ThreeDViewer({
 
   useEffect(() => {
     attachSelected();
-  }, [selectedId, edit3DId, attachSelected]);
+  }, [selectedId, selectedIds, edit3DId, attachSelected]);
 
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
@@ -1472,6 +1687,7 @@ function ThreeDViewer({
 
       <Floating3DInspector
         selectedComp={selectedComp}
+        selectedIds={selectedIds}
         isLocked={isLocked}
         onChange={onUpdateComp}
         unit={unit}
@@ -1481,7 +1697,10 @@ function ThreeDViewer({
       <ToolSidebar
         transformMode={transformMode}
         setTransformMode={setTransformMode}
-        hasSelection={!!selectedComp && editorMode === "editable"}
+        hasSelection={
+          (((selectedIds && selectedIds.length > 0) || !!selectedComp) &&
+            editorMode === "editable")
+        }
       />
 
       <div

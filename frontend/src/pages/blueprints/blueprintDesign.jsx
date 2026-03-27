@@ -268,17 +268,37 @@ export default function BlueprintDesign() {
   // ─────────────────────────────────────────────────────────────────────────
 
   useEffect(() => {
+    const validIdSet = new Set(components.map((c) => c.id));
+    const filteredSelectedIds = (selectedIds || []).filter((id) =>
+      validIdSet.has(id),
+    );
+
+    if (filteredSelectedIds.length !== (selectedIds || []).length) {
+      setSelectedIds(filteredSelectedIds);
+    }
+
     if (!components.length) {
       if (selectedId) setSelectedId(null);
+      if (selectedIds.length) setSelectedIds([]);
       if (edit3DId) setEdit3DId(null);
       return;
     }
 
-    if (!selectedId || !components.some((c) => c.id === selectedId)) {
-      setSelectedId(null);
-      setEdit3DId(null);
+    const nextPrimary =
+      selectedId && validIdSet.has(selectedId)
+        ? selectedId
+        : filteredSelectedIds[filteredSelectedIds.length - 1] || null;
+
+    if (selectedId !== nextPrimary) {
+      setSelectedId(nextPrimary);
     }
-  }, [components, selectedId, edit3DId]);
+
+    if (!nextPrimary && edit3DId) {
+      setEdit3DId(null);
+    } else if (nextPrimary && (!edit3DId || !validIdSet.has(edit3DId))) {
+      setEdit3DId(nextPrimary);
+    }
+  }, [components, selectedId, selectedIds, edit3DId]);
 
   useEffect(() => {
     if (!id || id === "new") {
@@ -349,9 +369,16 @@ export default function BlueprintDesign() {
 
   const selectedComp = components.find((c) => c.id === selectedId) || null;
 
-  const selectedComponents = useMemo(() => {
+   const selectedComponents = useMemo(() => {
+    const activeIds = Array.from(new Set((selectedIds || []).filter(Boolean)));
+
+    if (activeIds.length) {
+      const activeSet = new Set(activeIds);
+      return components.filter((c) => activeSet.has(c.id));
+    }
+
     return getSelectionGroup(components, selectedComp);
-  }, [components, selectedComp]);
+  }, [components, selectedComp, selectedIds]);
 
   const selectedBounds3D = useMemo(() => {
     return getComponentsBounds3D(selectedComponents);
@@ -359,8 +386,9 @@ export default function BlueprintDesign() {
 
   const selectedLabel = useMemo(() => {
     if (!selectedComp) return "";
+    if (selectedIds.length > 1) return `${selectedIds.length} Selected Objects`;
     return selectedComp.groupLabel || selectedComp.label;
-  }, [selectedComp]);
+  }, [selectedComp, selectedIds]);
 
   const selectedMaterialText = useMemo(() => {
     if (!selectedComponents.length) return "—";
@@ -492,6 +520,7 @@ export default function BlueprintDesign() {
 
       if (e.key === "Escape") {
         setSelectedId(null);
+        setSelectedIds([]);
         setEdit3DId(null);
         return;
       }
@@ -521,6 +550,7 @@ export default function BlueprintDesign() {
         if (components.length > 0) {
           setSelectedIds(components.map((c) => c.id));
           setSelectedId(components[0].id);
+          setEdit3DId(components[0].id);
           toast.success(`All ${components.length} object(s) selected.`);
         }
         return;
@@ -750,20 +780,62 @@ export default function BlueprintDesign() {
     toast.success(`Manual build started: ${groupLabel}`);
   }, [components]);
 
-  const updateComp = useCallback(
-    (cid, attrs) => {
+    const updateComp = useCallback(
+    (cid, attrs, options = {}) => {
       if (editorMode !== "editable") {
         toast.error("Nasa reference mode ka. Lumipat muna sa editable mode.");
         return;
       }
-      pushHistory(components);
-      const targetIds = new Set(
-        selectedIds.includes(cid) ? selectedIds : [cid],
-      );
+
+      const shouldApplyToSelection = !!options.applyToSelection;
+      const targetIds =
+        shouldApplyToSelection &&
+        selectedIds.includes(cid) &&
+        selectedIds.length > 1
+          ? selectedIds
+          : [cid];
+
+      if (!targetIds.length) return;
+
+      if (!options.skipHistory) {
+        pushHistory(components);
+      }
+
+      const targetSet = new Set(targetIds);
+
       setComponents((prev) =>
         prev.map((c) =>
-          c.id === cid ? normalizeComponent({ ...c, ...attrs }) : c,
+          targetSet.has(c.id) ? normalizeComponent({ ...c, ...attrs }) : c,
         ),
+      );
+    },
+    [editorMode, components, pushHistory, selectedIds],
+  );
+
+  const updateManyComps = useCallback(
+    (changesById = {}, options = {}) => {
+      if (editorMode !== "editable") {
+        toast.error("Nasa reference mode ka. Lumipat muna sa editable mode.");
+        return;
+      }
+
+      const entries = Object.entries(changesById).filter(
+        ([, attrs]) => attrs && Object.keys(attrs).length,
+      );
+
+      if (!entries.length) return;
+
+      if (!options.skipHistory) {
+        pushHistory(components);
+      }
+
+      const changeMap = new Map(entries);
+
+      setComponents((prev) =>
+        prev.map((c) => {
+          const attrs = changeMap.get(c.id);
+          return attrs ? normalizeComponent({ ...c, ...attrs }) : c;
+        }),
       );
     },
     [editorMode, components, pushHistory],
@@ -1495,6 +1567,7 @@ export default function BlueprintDesign() {
               setSelectedId={setSelectedId}
               setEdit3DId={setEdit3DId}
               onUpdateComp={updateComp}
+              onBatchUpdateComps={updateManyComps}
               lockedFields={lockedFields}
               canvasW={WORLD_W}
               canvasH={WORLD_H}
