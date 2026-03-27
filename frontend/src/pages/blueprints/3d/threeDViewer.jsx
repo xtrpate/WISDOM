@@ -44,6 +44,7 @@ const LIBRARY_TABS = [
   { key: "shapes", label: "Shapes" },
 ];
 
+
 const getLibraryBucket = (groupLabel = "") => {
   const text = groupLabel.toLowerCase();
 
@@ -216,6 +217,12 @@ function Floating3DInspector({
     });
   };
 
+  const applySelectionChange = (attrs) => {
+    onChange(selectedComp.id, attrs, {
+      applyToSelection: selectedIds.length > 1,
+    });
+  };
+
   const unitLabel = unit === "inch" ? "in" : "mm";
 
   return (
@@ -283,7 +290,7 @@ function Floating3DInspector({
           value={selectedComp.cornerRadius ?? 0}
           disabled={editorMode !== "editable" || isLocked(selectedComp)}
           onChange={(e) =>
-            onChange(selectedComp.id, {
+            applySelectionChange({
               cornerRadius: Number(e.target.value),
             })
           }
@@ -297,7 +304,7 @@ function Floating3DInspector({
           value={selectedComp.cornerRadius ?? 0}
           disabled={editorMode !== "editable" || isLocked(selectedComp)}
           onChange={(e) =>
-            onChange(selectedComp.id, {
+            applySelectionChange({
               cornerRadius: Math.max(
                 0,
                 Math.min(500, Number(e.target.value) || 0),
@@ -1250,6 +1257,7 @@ function ThreeDViewer({
 
     const renderer = new THREE.WebGLRenderer({
       antialias: true,
+      logarithmicDepthBuffer: true,
       powerPreference: "high-performance",
     });
     renderer.setSize(w, h);
@@ -1310,71 +1318,103 @@ function ThreeDViewer({
     topLight.position.set(0, 2600, 0);
     scene.add(topLight);
 
+        const FLOOR_Y = -canvasH / 2;
+
+    // Blueprint base plane
     const floorBase = new THREE.Mesh(
       new THREE.PlaneGeometry(6800, 6800),
       new THREE.MeshStandardMaterial({
-        color: 0x16263a,
-        roughness: 0.94,
-        metalness: 0.02,
+        color: 0x17345a,
+        roughness: 0.97,
+        metalness: 0.0,
+        emissive: 0x0a1422,
+        emissiveIntensity: 0.28,
+        polygonOffset: true,
+        polygonOffsetFactor: 1,
+        polygonOffsetUnits: 1,
       }),
     );
     floorBase.rotation.x = -Math.PI / 2;
-    floorBase.position.y = -canvasH / 2 - 0.2;
+    floorBase.position.y = FLOOR_Y - 1.5;
     floorBase.receiveShadow = true;
+    floorBase.renderOrder = 0;
     scene.add(floorBase);
 
-    const floorShadow = new THREE.Mesh(
-      new THREE.PlaneGeometry(6800, 6800),
-      new THREE.ShadowMaterial({ color: 0x000000, opacity: 0.12 }),
-    );
-    floorShadow.rotation.x = -Math.PI / 2;
-    floorShadow.position.y = -canvasH / 2;
-    floorShadow.receiveShadow = true;
-    scene.add(floorShadow);
+    // Minor blueprint grid
+    const minorGrid = new THREE.GridHelper(6000, 120, 0x5ea3e6, 0x274d78);
+    minorGrid.position.y = FLOOR_Y + 0.35;
+    minorGrid.material.transparent = true;
+    minorGrid.material.opacity = 0.34;
+    minorGrid.material.depthWrite = false;
+    minorGrid.renderOrder = 1;
+    scene.add(minorGrid);
 
-    const grid = new THREE.GridHelper(6000, 240, 0x4b89c8, 0x27405e);
-    grid.position.y = -canvasH / 2 + 0.1;
-    grid.material.opacity = 0.9;
-    grid.material.transparent = true;
-    scene.add(grid);
+    // Major blueprint grid
+    const majorGrid = new THREE.GridHelper(6000, 24, 0xb9e3ff, 0x6ea8dc);
+    majorGrid.position.y = FLOOR_Y + 0.75;
+    majorGrid.material.transparent = true;
+    majorGrid.material.opacity = 0.72;
+    majorGrid.material.depthWrite = false;
+    majorGrid.renderOrder = 2;
+    scene.add(majorGrid);
 
+    // Axis lines — slightly lifted above the grids
     const axisMatX = new THREE.LineBasicMaterial({
       color: 0xef4444,
       transparent: true,
-      opacity: 0.95,
+      opacity: 0.82,
+      depthWrite: false,
+      toneMapped: false,
     });
+
     const axisMatY = new THREE.LineBasicMaterial({
       color: 0x22c55e,
       transparent: true,
-      opacity: 0.95,
+      opacity: 0.88,
+      depthWrite: false,
+      toneMapped: false,
     });
+
     const axisMatZ = new THREE.LineBasicMaterial({
       color: 0x3b82f6,
       transparent: true,
-      opacity: 0.95,
+      opacity: 0.82,
+      depthWrite: false,
+      toneMapped: false,
     });
 
-    const makeAxis = (a, b, mat) =>
-      new THREE.Line(
+    const makeAxis = (a, b, mat, renderOrder = 3) => {
+      const line = new THREE.Line(
         new THREE.BufferGeometry().setFromPoints([
           new THREE.Vector3(...a),
           new THREE.Vector3(...b),
         ]),
         mat,
       );
+      line.renderOrder = renderOrder;
+      return line;
+    };
 
     scene.add(
       makeAxis(
-        [-3000, -canvasH / 2 + 0.2, 0],
-        [3000, -canvasH / 2 + 0.2, 0],
+        [-3000, FLOOR_Y + 1.05, 0],
+        [3000, FLOOR_Y + 1.05, 0],
         axisMatX,
       ),
     );
-    scene.add(makeAxis([0, -canvasH / 2, 0], [0, 2800, 0], axisMatY));
+
     scene.add(
       makeAxis(
-        [0, -canvasH / 2 + 0.2, -3000],
-        [0, -canvasH / 2 + 0.2, 3000],
+        [0, FLOOR_Y, 0],
+        [0, 2800, 0],
+        axisMatY,
+      ),
+    );
+
+    scene.add(
+      makeAxis(
+        [0, FLOOR_Y + 1.05, -3000],
+        [0, FLOOR_Y + 1.05, 3000],
         axisMatZ,
       ),
     );

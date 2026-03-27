@@ -1859,47 +1859,59 @@ export default function BlueprintDesign() {
 
             {/* Corner Radius — available for ALL objects */}
             {selectedComp && (
-              <div style={{ marginBottom: 7 }}>
-                <label style={S.propLabel}>
-                  Corner Radius (mm) — {selectedComp.cornerRadius ?? 0}mm
-                </label>
-                <input
-                  type="range"
-                  min="0"
-                  max="500"
-                  step="5"
-                  value={selectedComp.cornerRadius ?? 0}
-                  disabled={editorMode !== "editable" || isLocked(selectedComp)}
-                  onChange={(e) =>
-                    updateComp(selectedComp.id, {
+            <div style={{ marginBottom: 7 }}>
+              <label style={S.propLabel}>
+                Corner Radius (mm) — {selectedComp.cornerRadius ?? 0}mm
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="500"
+                step="5"
+                value={selectedComp.cornerRadius ?? 0}
+                disabled={editorMode !== "editable" || isLocked(selectedComp)}
+                onChange={(e) =>
+                  updateComp(
+                    selectedComp.id,
+                    {
                       cornerRadius: Number(e.target.value),
-                    })
-                  }
-                  style={{
-                    width: "100%",
-                    accentColor: "#3b82f6",
-                    marginBottom: 4,
-                  }}
-                />
-                <input
-                  type="number"
-                  min="0"
-                  max="500"
-                  step="5"
-                  value={selectedComp.cornerRadius ?? 0}
-                  disabled={editorMode !== "editable" || isLocked(selectedComp)}
-                  onChange={(e) =>
-                    updateComp(selectedComp.id, {
+                    },
+                    {
+                      applyToSelection: selectedIds.length > 1,
+                    },
+                  )
+                }
+                style={{
+                  width: "100%",
+                  accentColor: "#3b82f6",
+                  marginBottom: 4,
+                }}
+              />
+              <input
+                type="number"
+                min="0"
+                max="500"
+                step="5"
+                value={selectedComp.cornerRadius ?? 0}
+                disabled={editorMode !== "editable" || isLocked(selectedComp)}
+                onChange={(e) =>
+                  updateComp(
+                    selectedComp.id,
+                    {
                       cornerRadius: Math.max(
                         0,
                         Math.min(500, Number(e.target.value) || 0),
                       ),
-                    })
-                  }
-                  style={S.propInput}
-                />
-              </div>
-            )}
+                    },
+                    {
+                      applyToSelection: selectedIds.length > 1,
+                    },
+                  )
+                }
+                style={S.propInput}
+              />
+            </div>
+          )}
 
             {/* Top Width Ratio — trapezoid only */}
             {selectedComp && selectedComp.type === "shape_trapezoid" && (
