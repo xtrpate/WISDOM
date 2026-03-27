@@ -1026,56 +1026,7 @@ export default function BlueprintDesign() {
     ],
   );
 
-  const autoArrangeComponents = useCallback(() => {
-    if (editorMode !== "editable") {
-      toast.error("Reference mode ito. Lumipat muna sa editable mode.");
-      return;
-    }
-
-    setComponents((prev) => {
-      const generic = prev.filter((c) => !c.groupType);
-      const grouped = prev.filter((c) => c.groupType);
-
-      const arrangedGeneric = [];
-      for (const comp of generic) {
-        const typeDef = QUICK_LIBRARY_COMPONENTS.find(
-          (t) => t.type === comp.type,
-        ) || {
-          type: comp.type,
-          label: comp.label,
-          category: comp.category,
-          blueprintStyle: comp.blueprintStyle,
-          w: comp.width,
-          h: comp.height,
-          d: comp.depth,
-          fill: comp.fill,
-          material: comp.material,
-          unitPrice: comp.unitPrice,
-        };
-
-        const placement = getPlacedGenericComponentData(
-          {
-            ...typeDef,
-            w: comp.width,
-            h: comp.height,
-            d: comp.depth,
-          },
-          arrangedGeneric,
-        );
-
-        arrangedGeneric.push(
-          normalizeComponent({ ...comp, ...placement, rotationY: 0 }),
-        );
-      }
-
-      return [...grouped, ...arrangedGeneric];
-    });
-
-    setSelectedId(null);
-    setEdit3DId(null);
-    toast.success("Furniture and generic components auto-arranged.");
-  }, [editorMode, getPlacedGenericComponentData]);
-
+  
   const removeSelected = () => {
     if (editorMode !== "editable") {
       toast.error(
@@ -1383,13 +1334,7 @@ export default function BlueprintDesign() {
             </button>
           )}
 
-          <button
-            onClick={autoArrangeComponents}
-            style={{ ...S.toolBtn, background: "#7c3aed" }}
-          >
-            🧩 Auto Arrange
-          </button>
-
+          
           <button
             onClick={handleUndo}
             title="Undo (Ctrl+Z)"

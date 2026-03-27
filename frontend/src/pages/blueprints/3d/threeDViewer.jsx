@@ -1,5 +1,11 @@
 // 3d/ThreeDViewer.jsx — Three.js scene, inspector panels, and toolbar
-import React, { useEffect, useRef, useState, useCallback } from "react";
+import React, {
+  useEffect,
+  useRef,
+  useState,
+  useCallback,
+  useMemo,
+} from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { TransformControls } from "three/examples/jsm/controls/TransformControls";
@@ -31,43 +37,160 @@ const GRID_SIZE = 20;
 const FLOOR_OFFSET = 40;
 const MM_PER_INCH = 25.4;
 
-function Floating3DPalette({ onAdd, activeBuildLabel }) {
-  return (
-    <div style={S.floatingPanelLeft}>
-      <div style={S.floatingTitle}>Furniture Library</div>
+const LIBRARY_TABS = [
+  { key: "all", label: "All" },
+  { key: "templates", label: "Templates" },
+  { key: "parts", label: "Parts" },
+  { key: "shapes", label: "Shapes" },
+];
 
-      {COMPONENT_LIBRARY_GROUPS.map((group) => (
-        <div key={group.label} style={{ marginBottom: 10 }}>
-          <div style={S.floatingSectionLabel}>{group.label}</div>
-          <div style={{ display: "grid", gap: 6 }}>
-            {group.items.map((t) => (
-              <button
-                key={`${group.label}-${t.type}`}
-                onClick={() => onAdd(t)}
-                style={
-                  t.type === "chair_template"
-                    ? S.floatingPrimaryBtn
-                    : S.floatingPaletteBtn
-                }
-              >
-                {t.fill ? (
-                  <span
-                    style={{
-                      width: 11,
-                      height: 11,
-                      background: t.fill,
-                      borderRadius: 2,
-                      flexShrink: 0,
-                    }}
-                  />
-                ) : null}
-                <span style={{ flex: 1, textAlign: "left" }}>{t.label}</span>
-              </button>
-            ))}
+const getLibraryBucket = (groupLabel = "") => {
+  const text = groupLabel.toLowerCase();
+
+  if (text.includes("template")) return "templates";
+  if (text.includes("part")) return "parts";
+  if (text.includes("shape")) return "shapes";
+
+  return "all";
+};
+
+function Floating3DPalette({ onAdd, activeBuildLabel }) {
+  const [isOpen, setIsOpen] = useState(true);
+  const [activeTab, setActiveTab] = useState("templates");
+  const [search, setSearch] = useState("");
+
+  const filteredGroups = useMemo(() => {
+    const query = search.trim().toLowerCase();
+
+    return COMPONENT_LIBRARY_GROUPS.map((group) => {
+      const bucket = getLibraryBucket(group.label);
+      const tabMatches = activeTab === "all" || bucket === activeTab;
+
+      const items = (group.items || []).filter((item) => {
+        const haystack =
+          `${item.label || ""} ${item.type || ""} ${item.category || ""}`.toLowerCase();
+
+        const searchMatches = !query || haystack.includes(query);
+        return tabMatches && searchMatches;
+      });
+
+      return { ...group, items };
+    }).filter((group) => group.items.length > 0);
+  }, [activeTab, search]);
+
+  return (
+    <>
+      {!isOpen ? (
+          <button
+            type="button"
+            onClick={() => setIsOpen(true)}
+            style={S.libraryToggleBtn}
+          >
+            <span style={{ fontSize: 14, lineHeight: 1 }}>☰</span>
+            <span>Library</span>
+          </button>
+        ) : null}
+
+      <div
+        style={{
+          ...S.floatingPanelLeft,
+          ...S.floatingDrawerPanel,
+          opacity: isOpen ? 1 : 0,
+          transform: isOpen ? "translateX(0)" : "translateX(-18px)",
+          pointerEvents: isOpen ? "auto" : "none",
+        }}
+      >
+        <div style={S.libraryHeaderRow}>
+          <div style={{ minWidth: 0 }}>
+            <div style={S.floatingTitle}>Furniture Library</div>
+            <div style={S.librarySubtleText}>
+              Templates, parts, and custom shapes
+            </div>
           </div>
+
+          <button
+            type="button"
+            onClick={() => setIsOpen(false)}
+            style={S.libraryCloseBtn}
+          >
+            ×
+          </button>
         </div>
-      ))}
-    </div>
+
+        {activeBuildLabel ? (
+          <div style={S.activeBuildPill}>Active build: {activeBuildLabel}</div>
+        ) : null}
+
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search template, part, or shape..."
+          style={S.floatingSearchInput}
+        />
+
+        <div style={S.libraryTabsRow}>
+          {LIBRARY_TABS.map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setActiveTab(tab.key)}
+              style={{
+                ...S.libraryTabBtn,
+                ...(activeTab === tab.key ? S.libraryTabBtnActive : {}),
+              }}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        <div style={S.libraryGroupsWrap}>
+          {filteredGroups.length ? (
+            filteredGroups.map((group) => (
+              <div key={group.label}>
+                <div style={S.floatingSectionLabel}>{group.label}</div>
+
+                <div style={{ display: "grid", gap: 6 }}>
+                  {group.items.map((t) => (
+                    <button
+                      key={`${group.label}-${t.type}`}
+                      type="button"
+                      onClick={() => onAdd(t)}
+                      style={
+                        t.type === "chair_template"
+                          ? S.floatingPrimaryBtn
+                          : S.floatingPaletteBtn
+                      }
+                    >
+                      {t.fill ? (
+                        <span
+                          style={{
+                            width: 11,
+                            height: 11,
+                            background: t.fill,
+                            borderRadius: 2,
+                            flexShrink: 0,
+                          }}
+                        />
+                      ) : null}
+
+                      <span style={{ flex: 1, textAlign: "left" }}>
+                        {t.label}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))
+          ) : (
+            <div style={S.libraryEmptyState}>
+              No matching components found.
+            </div>
+          )}
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -317,7 +440,7 @@ function ToolSidebar({ transformMode, setTransformMode, hasSelection }) {
 
   return (
     <div
-      style={S.unityToolbar}
+      style={{ ...S.unityToolbar, top: 64 }}
       onMouseDown={handleMouseDown}
       onPointerDown={handleMouseDown}
     >
@@ -423,6 +546,91 @@ function ThreeDViewer({
 
   const cameraViewRef = useRef(null);
   const restoreRafRef = useRef(0);
+  const keysRef = useRef({});
+  const moveEnabledRef = useRef(false);
+  const lastFrameRef = useRef(performance.now());
+
+  const isTypingElement = useCallback((el) => {
+    if (!el) return false;
+    const tag = el.tagName;
+    return (
+      tag === "INPUT" ||
+      tag === "TEXTAREA" ||
+      tag === "SELECT" ||
+      el.isContentEditable
+    );
+  }, []);
+
+  const updateKeyboardCamera = useCallback((delta) => {
+    const camera = cameraRef.current;
+    const orbit = orbitRef.current;
+
+    if (!camera || !orbit || !moveEnabledRef.current) return;
+
+    const keys = keysRef.current;
+    const moveDir = new THREE.Vector3();
+    const forward = new THREE.Vector3();
+    const right = new THREE.Vector3();
+    const up = new THREE.Vector3(0, 1, 0);
+
+    camera.getWorldDirection(forward);
+    forward.y = 0;
+
+    if (forward.lengthSq() > 0) {
+      forward.normalize();
+    }
+
+    right.crossVectors(forward, up).normalize();
+
+    if (keys["KeyW"]) moveDir.add(forward);
+    if (keys["KeyS"]) moveDir.sub(forward);
+    if (keys["KeyD"]) moveDir.add(right);
+    if (keys["KeyA"]) moveDir.sub(right);
+    if (keys["KeyE"]) moveDir.y += 1;
+    if (keys["KeyQ"]) moveDir.y -= 1;
+
+    if (moveDir.lengthSq() === 0) return;
+
+    const speed = (keys["ShiftLeft"] || keys["ShiftRight"] ? 2200 : 1100) * delta;
+
+    moveDir.normalize().multiplyScalar(speed);
+
+    camera.position.add(moveDir);
+    orbit.target.add(moveDir);
+  }, [cameraRef, orbitRef]);
+
+  const clearKeys = useCallback(() => {
+    keysRef.current = {};
+  }, []);
+
+  const handleKeyDown = useCallback(
+    (e) => {
+      if (isTypingElement(document.activeElement)) return;
+      if (!moveEnabledRef.current) return;
+
+      keysRef.current[e.code] = true;
+
+      if (
+        [
+          "KeyW",
+          "KeyA",
+          "KeyS",
+          "KeyD",
+          "KeyQ",
+          "KeyE",
+          "ShiftLeft",
+          "ShiftRight",
+        ].includes(e.code)
+      ) {
+        e.preventDefault();
+      }
+    },
+    [isTypingElement],
+  );
+
+  const handleKeyUp = useCallback((e) => {
+    delete keysRef.current[e.code];
+}, []);
 
   useEffect(() => {
     onPushHistoryRef.current = onPushHistory;
@@ -459,6 +667,8 @@ function ThreeDViewer({
   useEffect(() => {
     setEdit3DIdRef.current = setEdit3DId;
   }, [setEdit3DId]);
+
+
 
   const isLocked3D = useCallback(
     (comp) =>
@@ -835,6 +1045,10 @@ function ThreeDViewer({
     renderer.domElement.style.display = "block";
     renderer.domElement.style.width = "100%";
     renderer.domElement.style.height = "100%";
+    renderer.domElement.style.outline = "none";
+
+    const canvas = renderer.domElement;
+    canvas.tabIndex = 0;
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x16263d);
@@ -975,6 +1189,28 @@ function ThreeDViewer({
 
     storeCameraView();
     applyTransformModeRaw();
+
+    const handleCanvasEnter = () => {
+      moveEnabledRef.current = true;
+    };
+
+    const handleCanvasLeave = () => {
+      moveEnabledRef.current = false;
+      clearKeys();
+    };
+
+    const handleCanvasClick = () => {
+      moveEnabledRef.current = true;
+      canvas.focus();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+    window.addEventListener("blur", clearKeys);
+
+    canvas.addEventListener("mouseenter", handleCanvasEnter);
+    canvas.addEventListener("mouseleave", handleCanvasLeave);
+    canvas.addEventListener("click", handleCanvasClick);
 
     const setMouseFromEvent = (event) => {
       const rect = renderer.domElement.getBoundingClientRect();
@@ -1127,8 +1363,17 @@ function ThreeDViewer({
     window.addEventListener("resize", onResize);
 
     let animId;
+    lastFrameRef.current = performance.now();
+
     const animate = () => {
       animId = requestAnimationFrame(animate);
+
+      const now = performance.now();
+      const delta = Math.min((now - lastFrameRef.current) / 1000, 0.05);
+      lastFrameRef.current = now;
+
+      updateKeyboardCamera(delta);
+
       orbit.update();
       renderer.render(scene, camera);
     };
@@ -1147,7 +1392,14 @@ function ThreeDViewer({
         "contextmenu",
         preventContextMenu,
       );
-      window.removeEventListener("resize", onResize);
+      
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+      window.removeEventListener("blur", clearKeys);
+
+      canvas.removeEventListener("mouseenter", handleCanvasEnter);
+      canvas.removeEventListener("mouseleave", handleCanvasLeave);
+      canvas.removeEventListener("click", handleCanvasClick);
 
       transform.detach();
       transform.dispose();
@@ -1174,6 +1426,10 @@ function ThreeDViewer({
     restoreCameraView,
     storeCameraView,
     applyTransformModeRaw,
+    updateKeyboardCamera,
+    handleKeyDown,
+    handleKeyUp,
+    clearKeys,
   ]);
 
   useEffect(() => {
