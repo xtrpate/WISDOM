@@ -911,7 +911,7 @@ export default function BlueprintDesign() {
         const groupId = makeGroupId();
         const groupLabel = `${t.label} ${buildCount}`;
 
-        const parts = buildFurnitureTemplateParts({
+        const rawParts = buildFurnitureTemplateParts({
           templateType: t.type,
           buildId: groupId,
           originX: x,
@@ -919,6 +919,15 @@ export default function BlueprintDesign() {
           canvasH: WORLD_H,
           groupLabel,
         });
+
+        const parts = rawParts.map((part) =>
+          normalizeComponent({
+            ...part,
+            templateType: t.type,
+            groupUnitPrice: Number(t.unitPrice) || 0,
+          }),
+        );
+
         pushHistory(components);
         setComponents((prev) => [...prev, ...parts]);
         setSelectedId(parts[0]?.id || null);

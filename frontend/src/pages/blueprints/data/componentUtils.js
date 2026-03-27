@@ -95,6 +95,8 @@ function normalizeComponent(c) {
       : c.material || "Marine Plywood",
     finish: resolvedFinishId,
     unitPrice: Number(c.unitPrice) || 0,
+    groupUnitPrice: Number(c.groupUnitPrice) || 0,
+    templateType: c.templateType || "",
     qty: Math.max(1, Number(c.qty) || 1),
     locked: !!c.locked,
     cornerRadius: normalizeCornerRadius(c.cornerRadius),

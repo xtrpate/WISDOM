@@ -502,12 +502,117 @@ function build3DViewPageSvg({
   `;
 }
 
+const WOOD_FINISH_PRICE_MAP = {
+  "oak-natural": 1.0,
+  "pine-light": 0.92,
+  "maple-cream": 1.08,
+  "beech-honey": 1.05,
+  "walnut-dark": 1.22,
+  "mahogany-rich": 1.18,
+  "teak-golden": 1.28,
+  "ash-beige": 1.1,
+};
+
+const TEMPLATE_GROUP_PRICE_MAP = {
+  template_dining_table: 16200,
+  template_bed_frame: 19800,
+  template_wardrobe: 24800,
+  template_coffee_table: 7800,
+  template_closet_wardrobe: 0,
+};
+
+const PART_PREFIX_GROUP_PRICE_MAP = {
+  dt_: TEMPLATE_GROUP_PRICE_MAP.template_dining_table,
+  bed_: TEMPLATE_GROUP_PRICE_MAP.template_bed_frame,
+  wr_: TEMPLATE_GROUP_PRICE_MAP.template_wardrobe,
+  ct_: TEMPLATE_GROUP_PRICE_MAP.template_coffee_table,
+};
+
+const getComponentVolume = (comp = {}) =>
+  Math.max(1, Number(comp?.width) || 0) *
+  Math.max(1, Number(comp?.height) || 0) *
+  Math.max(1, Number(comp?.depth) || 0);
+
+const getWoodFinishMultiplier = (comp = {}) => {
+  const finishId = String(comp?.finish || "").trim();
+
+  if (finishId && WOOD_FINISH_PRICE_MAP[finishId]) {
+    return Number(WOOD_FINISH_PRICE_MAP[finishId]) || 1;
+  }
+
+  const material = String(comp?.material || "").toLowerCase();
+
+  if (material.includes("pine")) return 0.92;
+  if (material.includes("oak")) return 1.0;
+  if (material.includes("maple")) return 1.08;
+  if (material.includes("beech")) return 1.05;
+  if (material.includes("walnut")) return 1.22;
+  if (material.includes("mahogany")) return 1.18;
+  if (material.includes("teak")) return 1.28;
+  if (material.includes("ash")) return 1.1;
+
+  return 1;
+};
+
+const getRecoveredGroupUnitPrice = (comp = {}) => {
+  const explicit = Number(comp?.groupUnitPrice) || 0;
+  if (explicit > 0) return explicit;
+
+  const templateType = String(comp?.templateType || "").trim();
+  if (templateType && TEMPLATE_GROUP_PRICE_MAP[templateType]) {
+    return Number(TEMPLATE_GROUP_PRICE_MAP[templateType]) || 0;
+  }
+
+  const type = String(comp?.type || "").toLowerCase();
+  const matchedPrefix = Object.keys(PART_PREFIX_GROUP_PRICE_MAP).find((prefix) =>
+    type.startsWith(prefix),
+  );
+  if (matchedPrefix) {
+    return Number(PART_PREFIX_GROUP_PRICE_MAP[matchedPrefix]) || 0;
+  }
+
+  const label = String(comp?.groupLabel || comp?.label || "").toLowerCase();
+  if (label.includes("dining table")) return TEMPLATE_GROUP_PRICE_MAP.template_dining_table;
+  if (label.includes("bed")) return TEMPLATE_GROUP_PRICE_MAP.template_bed_frame;
+  if (label.includes("wardrobe")) return TEMPLATE_GROUP_PRICE_MAP.template_wardrobe;
+  if (label.includes("coffee table")) return TEMPLATE_GROUP_PRICE_MAP.template_coffee_table;
+
+  return 0;
+};
+
+const getResolvedComponentPrice = (comp = {}, allComponents = []) => {
+  const qty = Number(comp.qty || 1);
+  const multiplier = getWoodFinishMultiplier(comp);
+
+  const direct = Number(comp?.unitPrice) || 0;
+  if (direct > 0) {
+    return Number((qty * direct * multiplier).toFixed(2));
+  }
+
+  const groupUnitPrice = getRecoveredGroupUnitPrice(comp);
+  if (!comp?.groupId || groupUnitPrice <= 0) return 0;
+
+  const volume = getComponentVolume(comp);
+  const groupItems = allComponents.filter((c) => c.groupId === comp.groupId);
+  const totalVolume = groupItems.reduce(
+    (sum, c) => sum + getComponentVolume(c),
+    0,
+  );
+
+  if (!volume || !totalVolume) return 0;
+
+  const allocatedBase = groupUnitPrice * (volume / totalVolume);
+  return Number((qty * allocatedBase * multiplier).toFixed(2));
+};
+
 function getMaterialsSummary(components) {
   const byMaterial = new Map();
   const byComponent = [];
 
   components.forEach((c) => {
     const key = c.material || "Unspecified";
+    const resolvedPrice = getResolvedComponentPrice(c, components);
+
     if (!byMaterial.has(key)) {
       byMaterial.set(key, {
         material: key,
@@ -518,7 +623,7 @@ function getMaterialsSummary(components) {
 
     const entry = byMaterial.get(key);
     entry.qty += Number(c.qty || 1);
-    entry.estimatedCost += Number(c.qty || 1) * Number(c.unitPrice || 0);
+    entry.estimatedCost += resolvedPrice;
 
     byComponent.push({
       partCode: c.partCode || "—",
@@ -526,7 +631,7 @@ function getMaterialsSummary(components) {
       material: c.material || "—",
       qty: Number(c.qty || 1),
       size: formatDims(c.width, c.height, c.depth, "mm"),
-      price: Number(c.qty || 1) * Number(c.unitPrice || 0),
+      price: resolvedPrice,
     });
   });
 
@@ -535,7 +640,6 @@ function getMaterialsSummary(components) {
     componentRows: byComponent,
   };
 }
-
 function buildMaterialsPageHtml({
   selectedComponents,
   selectedLabel,

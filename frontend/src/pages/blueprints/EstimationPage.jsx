@@ -99,31 +99,68 @@ const getComponentVolume = (comp = {}) =>
 
 const BASE_VOLUME = 120 * 80 * 60;
 
-const getResolvedUnitPrice = (comp = {}, allComponents = []) => {
-  const multiplier = getWoodFinishMultiplier(comp);
-  const volume = getComponentVolume(comp);
+const TEMPLATE_GROUP_PRICE_MAP = {
+  template_dining_table: 16200,
+  template_bed_frame: 19800,
+  template_wardrobe: 24800,
+  template_coffee_table: 7800,
+  template_closet_wardrobe: 0,
+};
 
-  const direct = Number(comp?.unitPrice) || 0;
+const PART_PREFIX_GROUP_PRICE_MAP = {
+  dt_: TEMPLATE_GROUP_PRICE_MAP.template_dining_table,
+  bed_: TEMPLATE_GROUP_PRICE_MAP.template_bed_frame,
+  wr_: TEMPLATE_GROUP_PRICE_MAP.template_wardrobe,
+  ct_: TEMPLATE_GROUP_PRICE_MAP.template_coffee_table,
+};
 
-  // ✅ direct price now scales with size
-  if (direct > 0) {
-    const scaled = direct * (volume / BASE_VOLUME);
-    return Number((scaled * multiplier).toFixed(2));
+const getRecoveredGroupUnitPrice = (comp = {}) => {
+  const explicit = Number(comp?.groupUnitPrice) || 0;
+  if (explicit > 0) return explicit;
+
+  const templateType = String(comp?.templateType || "").trim();
+  if (templateType && TEMPLATE_GROUP_PRICE_MAP[templateType]) {
+    return Number(TEMPLATE_GROUP_PRICE_MAP[templateType]) || 0;
   }
 
-  const groupUnitPrice = Number(comp?.groupUnitPrice) || 0;
+  const type = String(comp?.type || "").toLowerCase();
+  const matchedPrefix = Object.keys(PART_PREFIX_GROUP_PRICE_MAP).find((prefix) =>
+    type.startsWith(prefix),
+  );
+  if (matchedPrefix) {
+    return Number(PART_PREFIX_GROUP_PRICE_MAP[matchedPrefix]) || 0;
+  }
+
+  const label = String(comp?.groupLabel || comp?.label || "").toLowerCase();
+  if (label.includes("dining table")) return TEMPLATE_GROUP_PRICE_MAP.template_dining_table;
+  if (label.includes("bed")) return TEMPLATE_GROUP_PRICE_MAP.template_bed_frame;
+  if (label.includes("wardrobe")) return TEMPLATE_GROUP_PRICE_MAP.template_wardrobe;
+  if (label.includes("coffee table")) return TEMPLATE_GROUP_PRICE_MAP.template_coffee_table;
+
+  return 0;
+};
+
+const getResolvedUnitPrice = (comp = {}, allComponents = []) => {
+  const multiplier = getWoodFinishMultiplier(comp);
+
+  const direct = Number(comp?.unitPrice) || 0;
+  if (direct > 0) {
+    return Number((direct * multiplier).toFixed(2));
+  }
+
+  const groupUnitPrice = getRecoveredGroupUnitPrice(comp);
   if (!comp?.groupId || groupUnitPrice <= 0) return 0;
 
+  const volume = getComponentVolume(comp);
   const groupItems = allComponents.filter((c) => c.groupId === comp.groupId);
   const totalVolume = groupItems.reduce(
     (sum, c) => sum + getComponentVolume(c),
     0,
   );
 
-  if (!totalVolume) return 0;
+  if (!volume || !totalVolume) return 0;
 
   const allocatedBase = groupUnitPrice * (volume / totalVolume);
-
   return Number((allocatedBase * multiplier).toFixed(2));
 };
 
@@ -172,11 +209,34 @@ export default function EstimationPage() {
 
         if (estRes.data) {
           setEst(estRes.data);
-          setItems(
-            estRes.data.items?.length
-              ? estRes.data.items.map(normalizeItem)
-              : [{ ...BLANK_ITEM }],
+
+          const savedItems = Array.isArray(estRes.data.items)
+            ? estRes.data.items.map(normalizeItem)
+            : [];
+
+          const hasSavedPrice = savedItems.some(
+            (item) => Number(item.unit_cost || 0) > 0,
           );
+
+          if (savedItems.length && hasSavedPrice) {
+            setItems(savedItems);
+          } else {
+            let fallbackDesign = {};
+            try {
+              fallbackDesign =
+                typeof bpRes.data.design_data === "string"
+                  ? JSON.parse(bpRes.data.design_data || "{}")
+                  : bpRes.data.design_data || {};
+            } catch {
+              fallbackDesign = {};
+            }
+
+            const autoItems = buildAutoItemsFromComponents(
+              fallbackDesign.components || [],
+            );
+            setItems(autoItems.length ? autoItems : [{ ...BLANK_ITEM }]);
+          }
+
           setCosts({
             material_cost: estRes.data.material_cost || 0,
             labor_cost: estRes.data.labor_cost || 0,
