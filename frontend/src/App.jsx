@@ -26,7 +26,7 @@ import SuppliersPage from "./pages/inventory/SuppliersPage";
 
 // ── Blueprints ────────────────────────────────────────────────────────────────
 import BlueprintsPage from "./pages/blueprints/BlueprintsPage";
-import BlueprintDesign from "./pages/blueprints/blueprintDesign";
+import BlueprintDesign from "./pages/blueprints/BlueprintDesign";
 import EstimationPage from "./pages/blueprints/EstimationPage";
 import ContractsPage from "./pages/blueprints/ContractsPage";
 

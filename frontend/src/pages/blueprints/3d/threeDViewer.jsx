@@ -44,7 +44,6 @@ const LIBRARY_TABS = [
   { key: "shapes", label: "Shapes" },
 ];
 
-
 const getLibraryBucket = (groupLabel = "") => {
   const text = groupLabel.toLowerCase();
 
@@ -55,8 +54,211 @@ const getLibraryBucket = (groupLabel = "") => {
   return "all";
 };
 
-function Floating3DPalette({ onAdd, activeBuildLabel }) {
-  const [isOpen, setIsOpen] = useState(true);
+// --- NEW: Objects Tree Panel ---
+function FloatingObjectsTree({
+  components,
+  selectedId,
+  selectedIds = [],
+  onSelect,
+  isOpen,
+  onToggle,
+  isLocked3D, // Added to check lock status
+}) {
+  const grouped = useMemo(() => {
+    const groups = {};
+    const standalone = [];
+
+    components.forEach((c) => {
+      if (c.groupId) {
+        if (!groups[c.groupId]) {
+          groups[c.groupId] = {
+            id: c.groupId,
+            label: c.groupLabel || "Group",
+            items: [],
+          };
+        }
+        groups[c.groupId].items.push(c);
+      } else {
+        standalone.push(c);
+      }
+    });
+
+    return { groups: Object.values(groups), standalone };
+  }, [components]);
+
+  const handleSelect = (id, e) => {
+    e.stopPropagation();
+    if (e.shiftKey) {
+      const newSelected = selectedIds.includes(id)
+        ? selectedIds.filter((i) => i !== id)
+        : [...selectedIds, id];
+      onSelect(newSelected, newSelected[newSelected.length - 1] || null);
+    } else {
+      onSelect([id], id);
+    }
+  };
+
+  return (
+    <>
+      {!isOpen ? (
+        <button
+          type="button"
+          onClick={onToggle}
+          style={{ ...S.libraryToggleBtn, top: 60 }}
+        >
+          <span style={{ fontSize: 14, lineHeight: 1 }}>▤</span>
+          <span>Objects</span>
+        </button>
+      ) : null}
+
+      <div
+        style={{
+          ...S.floatingPanelLeft,
+          ...S.floatingDrawerPanel,
+          maxHeight: "60vh",
+          opacity: isOpen ? 1 : 0,
+          transform: isOpen ? "translateX(0)" : "translateX(-18px)",
+          pointerEvents: isOpen ? "auto" : "none",
+          overflowY: "auto",
+          zIndex: isOpen ? 50 : 1, // Elevated zIndex to overlap library toggle
+        }}
+      >
+        <div style={S.libraryHeaderRow}>
+          <div style={{ minWidth: 0 }}>
+            <div style={S.floatingTitle}>Objects Tree</div>
+            <div style={S.librarySubtleText}>Blueprint components</div>
+          </div>
+          <button type="button" onClick={onToggle} style={S.libraryCloseBtn}>
+            ×
+          </button>
+        </div>
+
+        <div style={{ display: "grid", gap: 6, marginTop: 10 }}>
+          {grouped.groups.map((g) => (
+            <div key={g.id} style={{ marginBottom: 8 }}>
+              <div style={{ ...S.floatingSectionLabel, color: "#93c5fd" }}>
+                ▼ {g.label}
+              </div>
+              <div
+                style={{
+                  paddingLeft: 12,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 4,
+                  marginTop: 4,
+                }}
+              >
+                {g.items.map((comp) => {
+                  const isSel =
+                    comp.id === selectedId || selectedIds.includes(comp.id);
+                  return (
+                    <div
+                      key={comp.id}
+                      onClick={(e) => handleSelect(comp.id, e)}
+                      style={{
+                        padding: "4px 8px",
+                        background: isSel ? "#2563eb" : "#1e293b",
+                        color: isSel ? "#fff" : "#cbd5e1",
+                        borderRadius: 4,
+                        fontSize: 11,
+                        cursor: "pointer",
+                        border: isSel
+                          ? "1px solid #60a5fa"
+                          : "1px solid #334155",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          width: "100%",
+                          alignItems: "center",
+                        }}
+                      >
+                        <span>
+                          {comp.partCode ? `${comp.partCode} — ` : ""}
+                          {comp.label}
+                        </span>
+                        {isLocked3D && isLocked3D(comp) && (
+                          <span style={{ fontSize: 10, marginLeft: 4 }}>
+                            🔒
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+
+          {grouped.standalone.length > 0 && (
+            <div style={{ marginBottom: 8 }}>
+              <div style={{ ...S.floatingSectionLabel, color: "#93c5fd" }}>
+                Standalone
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 4,
+                  marginTop: 4,
+                }}
+              >
+                {grouped.standalone.map((comp) => {
+                  const isSel =
+                    comp.id === selectedId || selectedIds.includes(comp.id);
+                  return (
+                    <div
+                      key={comp.id}
+                      onClick={(e) => handleSelect(comp.id, e)}
+                      style={{
+                        padding: "4px 8px",
+                        background: isSel ? "#2563eb" : "#1e293b",
+                        color: isSel ? "#fff" : "#cbd5e1",
+                        borderRadius: 4,
+                        fontSize: 11,
+                        cursor: "pointer",
+                        border: isSel
+                          ? "1px solid #60a5fa"
+                          : "1px solid #334155",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          width: "100%",
+                          alignItems: "center",
+                        }}
+                      >
+                        <span>
+                          {comp.partCode ? `${comp.partCode} — ` : ""}
+                          {comp.label}
+                        </span>
+                        {isLocked3D && isLocked3D(comp) && (
+                          <span style={{ fontSize: 10, marginLeft: 4 }}>
+                            🔒
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {components.length === 0 && (
+            <div style={S.libraryEmptyState}>No objects in scene.</div>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
+function Floating3DPalette({ onAdd, activeBuildLabel, isOpen, onToggle }) {
   const [activeTab, setActiveTab] = useState("templates");
   const [search, setSearch] = useState("");
 
@@ -82,15 +284,11 @@ function Floating3DPalette({ onAdd, activeBuildLabel }) {
   return (
     <>
       {!isOpen ? (
-          <button
-            type="button"
-            onClick={() => setIsOpen(true)}
-            style={S.libraryToggleBtn}
-          >
-            <span style={{ fontSize: 14, lineHeight: 1 }}>☰</span>
-            <span>Library</span>
-          </button>
-        ) : null}
+        <button type="button" onClick={onToggle} style={S.libraryToggleBtn}>
+          <span style={{ fontSize: 14, lineHeight: 1 }}>☰</span>
+          <span>Library</span>
+        </button>
+      ) : null}
 
       <div
         style={{
@@ -99,6 +297,7 @@ function Floating3DPalette({ onAdd, activeBuildLabel }) {
           opacity: isOpen ? 1 : 0,
           transform: isOpen ? "translateX(0)" : "translateX(-18px)",
           pointerEvents: isOpen ? "auto" : "none",
+          zIndex: isOpen ? 50 : 1, // Elevated zIndex to overlap objects toggle
         }}
       >
         <div style={S.libraryHeaderRow}>
@@ -109,11 +308,7 @@ function Floating3DPalette({ onAdd, activeBuildLabel }) {
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setIsOpen(false)}
-            style={S.libraryCloseBtn}
-          >
+          <button type="button" onClick={onToggle} style={S.libraryCloseBtn}>
             ×
           </button>
         </div>
@@ -185,9 +380,7 @@ function Floating3DPalette({ onAdd, activeBuildLabel }) {
               </div>
             ))
           ) : (
-            <div style={S.libraryEmptyState}>
-              No matching components found.
-            </div>
+            <div style={S.libraryEmptyState}>No matching components found.</div>
           )}
         </div>
       </div>
@@ -370,7 +563,7 @@ function Floating3DInspector({
           type="color"
           value={selectedComp.fill || "#d9c2a5"}
           disabled={editorMode !== "editable" || isLocked(selectedComp)}
-             onChange={(e) =>
+          onChange={(e) =>
             applyStyleChange({
               fill: e.target.value,
               finish: "",
@@ -389,9 +582,7 @@ function Floating3DInspector({
         <input
           value={selectedComp.material || ""}
           disabled={editorMode !== "editable" || isLocked(selectedComp)}
-          onChange={(e) =>
-            applyStyleChange({ material: e.target.value })
-          }
+          onChange={(e) => applyStyleChange({ material: e.target.value })}
           style={S.floatingInput}
         />
       </div>
@@ -404,9 +595,7 @@ function Floating3DInspector({
             value={selectedComp.finish ?? ""}
             disabled={editorMode !== "editable" || isLocked(selectedComp)}
             onChange={(e) =>
-              applyStyleChange(
-                applyWoodFinish(selectedComp, e.target.value),
-              )
+              applyStyleChange(applyWoodFinish(selectedComp, e.target.value))
             }
             style={S.floatingInput}
           >
@@ -439,7 +628,13 @@ function Floating3DInspector({
   );
 }
 
-function ToolSidebar({ transformMode, setTransformMode, hasSelection }) {
+function ToolSidebar({
+  transformMode,
+  setTransformMode,
+  hasSelection,
+  isSelectionLocked,
+  onToggleLock,
+}) {
   const handleToolClick = (mode) => (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -453,7 +648,7 @@ function ToolSidebar({ transformMode, setTransformMode, hasSelection }) {
 
   return (
     <div
-      style={{ ...S.unityToolbar, top: 64 }}
+      style={{ ...S.unityToolbar, top: 110 }}
       onMouseDown={handleMouseDown}
       onPointerDown={handleMouseDown}
     >
@@ -501,6 +696,27 @@ function ToolSidebar({ transformMode, setTransformMode, hasSelection }) {
       >
         ⤢
       </button>
+
+      {/* --- NEW: Lock Button --- */}
+      <button
+        title={isSelectionLocked ? "Unlock Selected" : "Lock Selected"}
+        onMouseDown={handleMouseDown}
+        onPointerDown={handleMouseDown}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (hasSelection) onToggleLock();
+        }}
+        disabled={!hasSelection}
+        style={{
+          ...S.unityToolBtn,
+          opacity: hasSelection ? 1 : 0.45,
+          color: isSelectionLocked ? "#ef4444" : "inherit", // Red when locked
+          marginTop: 8, // Visual separator
+        }}
+      >
+        {isSelectionLocked ? "🔒" : "🔓"}
+      </button>
     </div>
   );
 }
@@ -529,6 +745,8 @@ function ThreeDViewer({
   unit,
   editorMode,
 }) {
+  const [activeLeftPanel, setActiveLeftPanel] = useState("library"); // State to manage panel overlay
+
   const onPushHistoryRef = useRef(onPushHistory);
   const onBeforeDragRef = useRef(null);
 
@@ -567,6 +785,12 @@ function ThreeDViewer({
   const moveEnabledRef = useRef(false);
   const lastFrameRef = useRef(performance.now());
 
+  // --- NEW: 3D Selection Box State (Fixed with Ref) ---
+  const [selectionRect, setSelectionRect] = useState(null);
+  const selectionRectRef = useRef(null);
+  const isSelectingRef = useRef(false);
+  const startPointRef = useRef({ x: 0, y: 0 });
+
   const isTypingElement = useCallback((el) => {
     if (!el) return false;
     const tag = el.tagName;
@@ -578,43 +802,47 @@ function ThreeDViewer({
     );
   }, []);
 
-  const updateKeyboardCamera = useCallback((delta) => {
-    const camera = cameraRef.current;
-    const orbit = orbitRef.current;
+  const updateKeyboardCamera = useCallback(
+    (delta) => {
+      const camera = cameraRef.current;
+      const orbit = orbitRef.current;
 
-    if (!camera || !orbit || !moveEnabledRef.current) return;
+      if (!camera || !orbit || !moveEnabledRef.current) return;
 
-    const keys = keysRef.current;
-    const moveDir = new THREE.Vector3();
-    const forward = new THREE.Vector3();
-    const right = new THREE.Vector3();
-    const up = new THREE.Vector3(0, 1, 0);
+      const keys = keysRef.current;
+      const moveDir = new THREE.Vector3();
+      const forward = new THREE.Vector3();
+      const right = new THREE.Vector3();
+      const up = new THREE.Vector3(0, 1, 0);
 
-    camera.getWorldDirection(forward);
-    forward.y = 0;
+      camera.getWorldDirection(forward);
+      forward.y = 0;
 
-    if (forward.lengthSq() > 0) {
-      forward.normalize();
-    }
+      if (forward.lengthSq() > 0) {
+        forward.normalize();
+      }
 
-    right.crossVectors(forward, up).normalize();
+      right.crossVectors(forward, up).normalize();
 
-    if (keys["KeyW"]) moveDir.add(forward);
-    if (keys["KeyS"]) moveDir.sub(forward);
-    if (keys["KeyD"]) moveDir.add(right);
-    if (keys["KeyA"]) moveDir.sub(right);
-    if (keys["KeyE"]) moveDir.y += 1;
-    if (keys["KeyQ"]) moveDir.y -= 1;
+      if (keys["KeyW"]) moveDir.add(forward);
+      if (keys["KeyS"]) moveDir.sub(forward);
+      if (keys["KeyD"]) moveDir.add(right);
+      if (keys["KeyA"]) moveDir.sub(right);
+      if (keys["KeyE"]) moveDir.y += 1;
+      if (keys["KeyQ"]) moveDir.y -= 1;
 
-    if (moveDir.lengthSq() === 0) return;
+      if (moveDir.lengthSq() === 0) return;
 
-    const speed = (keys["ShiftLeft"] || keys["ShiftRight"] ? 2200 : 1100) * delta;
+      const speed =
+        (keys["ShiftLeft"] || keys["ShiftRight"] ? 2200 : 1100) * delta;
 
-    moveDir.normalize().multiplyScalar(speed);
+      moveDir.normalize().multiplyScalar(speed);
 
-    camera.position.add(moveDir);
-    orbit.target.add(moveDir);
-  }, [cameraRef, orbitRef]);
+      camera.position.add(moveDir);
+      orbit.target.add(moveDir);
+    },
+    [cameraRef, orbitRef],
+  );
 
   const clearKeys = useCallback(() => {
     keysRef.current = {};
@@ -647,7 +875,7 @@ function ThreeDViewer({
 
   const handleKeyUp = useCallback((e) => {
     delete keysRef.current[e.code];
-}, []);
+  }, []);
 
   useEffect(() => {
     onPushHistoryRef.current = onPushHistory;
@@ -693,8 +921,6 @@ function ThreeDViewer({
     setEdit3DIdRef.current = setEdit3DId;
   }, [setEdit3DId]);
 
-
-
   const isLocked3D = useCallback(
     (comp) =>
       comp.locked ||
@@ -732,8 +958,10 @@ function ThreeDViewer({
     [canvasW, canvasH, canvasD],
   );
 
-    const getActiveSelectionIds = useCallback(() => {
-    const ids = Array.from(new Set((selectedIdsRef.current || []).filter(Boolean)));
+  const getActiveSelectionIds = useCallback(() => {
+    const ids = Array.from(
+      new Set((selectedIdsRef.current || []).filter(Boolean)),
+    );
     if (ids.length) return ids;
     return selectedIdRef.current ? [selectedIdRef.current] : [];
   }, []);
@@ -1114,7 +1342,7 @@ function ThreeDViewer({
     });
   }, [preserveCameraView, applyTransformModeRaw]);
 
-    const attachSelectedRaw = useCallback(() => {
+  const attachSelectedRaw = useCallback(() => {
     const transform = transformRef.current;
     if (!transform) return;
 
@@ -1126,6 +1354,7 @@ function ThreeDViewer({
       return;
     }
 
+    // This filters out locked components so controls won't attach
     const entries = getSelectionEntries(activeIds).filter(
       ({ comp }) => !isLocked3DRef.current(comp),
     );
@@ -1318,7 +1547,7 @@ function ThreeDViewer({
     topLight.position.set(0, 2600, 0);
     scene.add(topLight);
 
-        const FLOOR_Y = -canvasH / 2;
+    const FLOOR_Y = -canvasH / 2;
 
     // Blueprint base plane
     const floorBase = new THREE.Mesh(
@@ -1396,27 +1625,13 @@ function ThreeDViewer({
     };
 
     scene.add(
-      makeAxis(
-        [-3000, FLOOR_Y + 1.05, 0],
-        [3000, FLOOR_Y + 1.05, 0],
-        axisMatX,
-      ),
+      makeAxis([-3000, FLOOR_Y + 1.05, 0], [3000, FLOOR_Y + 1.05, 0], axisMatX),
     );
 
-    scene.add(
-      makeAxis(
-        [0, FLOOR_Y, 0],
-        [0, 2800, 0],
-        axisMatY,
-      ),
-    );
+    scene.add(makeAxis([0, FLOOR_Y, 0], [0, 2800, 0], axisMatY));
 
     scene.add(
-      makeAxis(
-        [0, FLOOR_Y + 1.05, -3000],
-        [0, FLOOR_Y + 1.05, 3000],
-        axisMatZ,
-      ),
+      makeAxis([0, FLOOR_Y + 1.05, -3000], [0, FLOOR_Y + 1.05, 3000], axisMatZ),
     );
 
     const orbit = new OrbitControls(camera, renderer.domElement);
@@ -1490,7 +1705,7 @@ function ThreeDViewer({
       return hits[0] || null;
     };
 
-        const onDraggingChanged = (event) => {
+    const onDraggingChanged = (event) => {
       orbit.enabled = !event.value;
 
       const activeIds = getActiveSelectionIds();
@@ -1538,8 +1753,111 @@ function ThreeDViewer({
       }
     };
 
+    // --- NEW: Box Selection Event Handlers (Fixed with Ref to prevent infinite loops) ---
+    const onPointerMove = (e) => {
+      if (!isSelectingRef.current) return;
+      const rect = renderer.domElement.getBoundingClientRect();
+      const currentX = clamp(e.clientX - rect.left, 0, rect.width);
+      const currentY = clamp(e.clientY - rect.top, 0, rect.height);
+
+      const minX = Math.min(startPointRef.current.x, currentX);
+      const maxX = Math.max(startPointRef.current.x, currentX);
+      const minY = Math.min(startPointRef.current.y, currentY);
+      const maxY = Math.max(startPointRef.current.y, currentY);
+
+      const newRect = {
+        x: minX,
+        y: minY,
+        w: maxX - minX,
+        h: maxY - minY,
+      };
+
+      selectionRectRef.current = newRect;
+      setSelectionRect(newRect);
+    };
+
+    const onPointerUp = (e) => {
+      if (isSelectingRef.current) {
+        isSelectingRef.current = false;
+        orbit.enabled = true; // Re-enable orbit controls
+
+        const rectBoxData = selectionRectRef.current;
+
+        if (rectBoxData && rectBoxData.w > 5 && rectBoxData.h > 5) {
+          // Find objects inside the selection box
+          const rectBox = new THREE.Box2(
+            new THREE.Vector2(rectBoxData.x, rectBoxData.y),
+            new THREE.Vector2(
+              rectBoxData.x + rectBoxData.w,
+              rectBoxData.y + rectBoxData.h,
+            ),
+          );
+
+          const selectedNow = [];
+          const canvasWidth = renderer.domElement.clientWidth;
+          const canvasHeight = renderer.domElement.clientHeight;
+          const halfW = canvasWidth / 2;
+          const halfH = canvasHeight / 2;
+
+          selectableMeshesRef.current.forEach((mesh) => {
+            const pos = new THREE.Vector3();
+            mesh.getWorldPosition(pos);
+            pos.project(camera);
+
+            const screenX = pos.x * halfW + halfW;
+            const screenY = -(pos.y * halfH) + halfH;
+            const screenPoint = new THREE.Vector2(screenX, screenY);
+
+            if (rectBox.containsPoint(screenPoint)) {
+              if (mesh.userData.rootId) {
+                selectedNow.push(mesh.userData.rootId);
+              }
+            }
+          });
+
+          if (selectedNow.length > 0) {
+            preserveCameraView(() => {
+              const activeSet = new Set(getActiveSelectionIds());
+              selectedNow.forEach((id) => activeSet.add(id));
+              const newArr = Array.from(activeSet);
+              const newPrimary = newArr[newArr.length - 1] || null;
+
+              applySelectionState(newArr, newPrimary);
+              attachSelectedRaw();
+              applyTransformModeRaw();
+            });
+            storeCameraView();
+          }
+        }
+
+        // Clear the box visually and reset ref
+        selectionRectRef.current = null;
+        setSelectionRect(null);
+      }
+    };
+
     const onPointerDown = (e) => {
       if (transform.axis) return;
+
+      // --- NEW: Start Selection Box ---
+      if (e.shiftKey && e.button === 0) {
+        isSelectingRef.current = true;
+        orbit.enabled = false; // Disable orbit so it doesn't move while drawing the box
+        const rect = renderer.domElement.getBoundingClientRect();
+        startPointRef.current = {
+          x: e.clientX - rect.left,
+          y: e.clientY - rect.top,
+        };
+        const initialRect = {
+          x: startPointRef.current.x,
+          y: startPointRef.current.y,
+          w: 0,
+          h: 0,
+        };
+        selectionRectRef.current = initialRect;
+        setSelectionRect(initialRect);
+        return; // Skip standard raycast picking
+      }
 
       const hit = pickMesh(e);
 
@@ -1553,7 +1871,10 @@ function ThreeDViewer({
 
       const hitId = hit.object.userData.rootId;
       const entry = entryMapRef.current.get(hitId);
-      if (!entry || isLocked3DRef.current(entry.comp)) return;
+
+      // CHANGED: Allow selection of locked objects so the user can unlock them.
+      // attachSelectedRaw() will prevent transform controls from attaching if locked.
+      if (!entry) return;
 
       preserveCameraView(() => {
         if (e.shiftKey) {
@@ -1593,7 +1914,9 @@ function ThreeDViewer({
 
       const hitId = hit.object.userData.rootId;
       const entry = entryMapRef.current.get(hitId);
-      if (!entry || isLocked3DRef.current(entry.comp)) return;
+
+      // CHANGED: Allow double clicking locked objects to focus camera on them.
+      if (!entry) return;
 
       preserveCameraView(() => {
         applySelectionState([hitId], hitId);
@@ -1622,7 +1945,11 @@ function ThreeDViewer({
     transform.addEventListener("dragging-changed", onDraggingChanged);
     transform.addEventListener("objectChange", onTransformObjectChange);
     orbit.addEventListener("change", onOrbitChange);
+
     renderer.domElement.addEventListener("pointerdown", onPointerDown);
+    renderer.domElement.addEventListener("pointermove", onPointerMove); // NEW
+    window.addEventListener("pointerup", onPointerUp); // NEW
+
     renderer.domElement.addEventListener("dblclick", onDoubleClick);
     renderer.domElement.addEventListener("contextmenu", preventContextMenu);
     window.addEventListener("resize", onResize);
@@ -1652,13 +1979,17 @@ function ThreeDViewer({
       transform.removeEventListener("dragging-changed", onDraggingChanged);
       transform.removeEventListener("objectChange", onTransformObjectChange);
       orbit.removeEventListener("change", onOrbitChange);
+
       renderer.domElement.removeEventListener("pointerdown", onPointerDown);
+      renderer.domElement.removeEventListener("pointermove", onPointerMove); // NEW
+      window.removeEventListener("pointerup", onPointerUp); // NEW
+
       renderer.domElement.removeEventListener("dblclick", onDoubleClick);
       renderer.domElement.removeEventListener(
         "contextmenu",
         preventContextMenu,
       );
-      
+
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
       window.removeEventListener("blur", clearKeys);
@@ -1716,13 +2047,89 @@ function ThreeDViewer({
     attachSelected();
   }, [selectedId, selectedIds, edit3DId, attachSelected]);
 
+  // --- NEW: Toggle Lock Logic for selected items ---
+  const activeIdsForLock = Array.from(
+    new Set([...(selectedIds || []), selectedId].filter(Boolean)),
+  );
+
+  // Calculate if the entire current selection is locked
+  const isSelectionLockedStatus =
+    activeIdsForLock.length > 0 &&
+    activeIdsForLock.every((id) => {
+      const comp = components.find((c) => c.id === id);
+      return comp ? isLocked3DRef.current(comp) : false;
+    });
+
+  const handleToggleLock = useCallback(() => {
+    const activeIds = Array.from(
+      new Set(
+        [...(selectedIdsRef.current || []), selectedIdRef.current].filter(
+          Boolean,
+        ),
+      ),
+    );
+    if (!activeIds.length) return;
+
+    const isCurrentlyLocked = activeIds.every((id) => {
+      const entry = entryMapRef.current.get(id);
+      return entry ? isLocked3DRef.current(entry.comp) : false;
+    });
+
+    const updates = {};
+    activeIds.forEach((id) => {
+      updates[id] = { locked: !isCurrentlyLocked };
+    });
+
+    onBatchUpdateCompsRef.current?.(updates);
+  }, []);
+
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
       <div ref={mountRef} style={{ width: "100%", height: "100%" }} />
 
+      {/* --- NEW: Visual Box for Selection --- */}
+      {selectionRect && (
+        <div
+          style={{
+            position: "absolute",
+            border: "1px solid rgba(56, 189, 248, 0.8)",
+            backgroundColor: "rgba(56, 189, 248, 0.2)",
+            pointerEvents: "none",
+            left: selectionRect.x,
+            top: selectionRect.y,
+            width: selectionRect.w,
+            height: selectionRect.h,
+            zIndex: 1000,
+          }}
+        />
+      )}
+
       <Floating3DPalette
         onAdd={addComponent}
         activeBuildLabel={activeBuildLabel}
+        isOpen={activeLeftPanel === "library"}
+        onToggle={() =>
+          setActiveLeftPanel(activeLeftPanel === "library" ? null : "library")
+        }
+      />
+
+      <FloatingObjectsTree
+        components={components}
+        selectedId={selectedId}
+        selectedIds={selectedIds}
+        isOpen={activeLeftPanel === "objects"}
+        isLocked3D={isLocked3D} // Passed down to show icons
+        onToggle={() =>
+          setActiveLeftPanel(activeLeftPanel === "objects" ? null : "objects")
+        }
+        onSelect={(ids, primaryId) => {
+          preserveCameraView(() => {
+            applySelectionState(ids, primaryId);
+            attachSelectedRaw();
+            applyTransformModeRaw();
+          });
+          storeCameraView();
+        }}
       />
 
       <Floating3DInspector
@@ -1738,9 +2145,11 @@ function ThreeDViewer({
         transformMode={transformMode}
         setTransformMode={setTransformMode}
         hasSelection={
-          (((selectedIds && selectedIds.length > 0) || !!selectedComp) &&
-            editorMode === "editable")
+          ((selectedIds && selectedIds.length > 0) || !!selectedComp) &&
+          editorMode === "editable"
         }
+        isSelectionLocked={isSelectionLockedStatus} // Passed down for button UI
+        onToggleLock={handleToggleLock} // Passed down for action
       />
 
       <div
