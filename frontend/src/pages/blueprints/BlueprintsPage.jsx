@@ -227,13 +227,13 @@ export default function BlueprintsPage() {
       try {
         res = await api.post('/blueprints', {
           title: createTitle.trim(),
-          source: 'manual',
+          source: 'created',
           stage: 'design',
         });
       } catch {
         const fd = new FormData();
         fd.append('title', createTitle.trim());
-        fd.append('source', 'manual');
+        fd.append('source', 'created');
         fd.append('stage', 'design');
 
         res = await api.post('/blueprints', fd, {

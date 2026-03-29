@@ -104,6 +104,63 @@ function getBlueprintFileMeta(file) {
   };
 }
 
+const REFERENCE_VIEWS = ['front', 'back', 'left', 'right', 'top'];
+
+function createEmptyReferenceFiles() {
+  return {
+    front: null,
+    back: null,
+    left: null,
+    right: null,
+    top: null,
+  };
+}
+
+function normalizeReferenceFilesMap(value = {}, fallbackTitle = '') {
+  const next = createEmptyReferenceFiles();
+
+  REFERENCE_VIEWS.forEach((view) => {
+    const normalized = normalizeReferenceFile(
+      value?.[view],
+      fallbackTitle ? `${fallbackTitle} ${view}` : `${view} reference`
+    );
+
+    if (normalized) {
+      next[view] = normalized;
+    }
+  });
+
+  return next;
+}
+
+function buildUploadedReferenceFiles(uploadedFiles = {}, fallbackTitle = '') {
+  const next = createEmptyReferenceFiles();
+
+  REFERENCE_VIEWS.forEach((view) => {
+    const file = uploadedFiles?.[view];
+    if (!file) return;
+
+    const meta = getBlueprintFileMeta(file);
+
+    next[view] = normalizeReferenceFile(
+      {
+        url: meta.file_url,
+        type: meta.file_type,
+        name: file.originalname || `${fallbackTitle || 'Reference'} ${view}`,
+        source: 'imported',
+      },
+      fallbackTitle ? `${fallbackTitle} ${view}` : `${view} reference`
+    );
+  });
+
+  return next;
+}
+
+function hasAnyReferenceFiles(referenceFiles = {}) {
+  return REFERENCE_VIEWS.some((view) => referenceFiles?.[view]?.url);
+}
+
+
 function normalizeReferenceFile(value, fallbackTitle = '') {
   const url = value?.url || value?.file_url || null;
   const type = String(value?.type || value?.file_type || '')
@@ -128,16 +185,45 @@ function mergeDesignData(value, blueprintLike = {}, fallbackTitle = '') {
   if (!Array.isArray(designData.components)) designData.components = [];
   if (!designData.unit) designData.unit = 'mm';
 
+  const existingReferenceFiles = normalizeReferenceFilesMap(
+    designData.reference_files || designData.referenceFiles,
+    fallbackTitle
+  );
+
+  const incomingReferenceFiles = normalizeReferenceFilesMap(
+    blueprintLike.reference_files || blueprintLike.referenceFiles,
+    fallbackTitle
+  );
+
   const existingReference = normalizeReferenceFile(
     designData.reference_file || designData.referenceFile,
     fallbackTitle
   );
+
   const blueprintReference = normalizeReferenceFile(blueprintLike, fallbackTitle);
 
-  if (blueprintReference || existingReference) {
-    designData.reference_file = blueprintReference || existingReference;
+  const finalReferenceFiles = createEmptyReferenceFiles();
+
+  REFERENCE_VIEWS.forEach((view) => {
+    finalReferenceFiles[view] =
+      incomingReferenceFiles[view] ||
+      existingReferenceFiles[view] ||
+      null;
+  });
+
+  if (!finalReferenceFiles.front) {
+    finalReferenceFiles.front = blueprintReference || existingReference || null;
   }
 
+  if (hasAnyReferenceFiles(finalReferenceFiles)) {
+    designData.reference_files = finalReferenceFiles;
+    designData.reference_file = finalReferenceFiles.front || null;
+  } else {
+    delete designData.reference_files;
+    delete designData.reference_file;
+  }
+
+  delete designData.referenceFiles;
   delete designData.referenceFile;
 
   return JSON.stringify(designData);
@@ -422,16 +508,26 @@ exports.create = async (req, res) => {
     }
 
     const finalTitle = String(title).trim();
+    const uploadedReferenceFiles = buildUploadedReferenceFiles(req.referenceFiles, finalTitle);
+    const primaryReference = uploadedReferenceFiles.front || null;
     const fileMeta = getBlueprintFileMeta(req.file);
-    const normalizedSource = normalizeSource(source, !!req.file);
+    const normalizedSource = normalizeSource(
+      source,
+      !!req.file || hasAnyReferenceFiles(uploadedReferenceFiles)
+    );
     const finalStage = String(stage || '').trim() || 'design';
-    const finalThumbnail = thumbnail_url || fileMeta.default_thumbnail_url || null;
+    const finalThumbnail =
+      thumbnail_url ||
+      primaryReference?.url ||
+      fileMeta.default_thumbnail_url ||
+      null;
 
     const finalDesignData = mergeDesignData(
       design_data,
       {
-        file_url: fileMeta.file_url,
-        file_type: fileMeta.file_type,
+        file_url: primaryReference?.url || fileMeta.file_url,
+        file_type: primaryReference?.type || fileMeta.file_type,
+        reference_files: uploadedReferenceFiles,
       },
       finalTitle
     );
@@ -466,8 +562,8 @@ exports.create = async (req, res) => {
         title: finalTitle,
         source: fileMeta.source || normalizedSource,
         stage: finalStage,
-        file_url: fileMeta.file_url,
-        file_type: fileMeta.file_type,
+        file_url: primaryReference?.url || fileMeta.file_url,
+        file_type: primaryReference?.type || fileMeta.file_type,
         thumbnail_url: finalThumbnail,
         design_data: finalDesignData,
       },
@@ -492,6 +588,11 @@ exports.update = async (req, res) => {
 
     const locked = safeJsonParse(bp.locked_fields, []);
     const updates = { ...req.body };
+    const uploadedReferenceFiles = buildUploadedReferenceFiles(
+      req.referenceFiles,
+      bp.title || ''
+    );
+    const hasUploadedReferenceFiles = hasAnyReferenceFiles(uploadedReferenceFiles);
     const fileMeta = getBlueprintFileMeta(req.file);
 
     locked.forEach((field) => delete updates[field]);
@@ -529,7 +630,10 @@ exports.update = async (req, res) => {
     }
 
     if (filtered.source) {
-      filtered.source = normalizeSource(filtered.source, !!req.file);
+      filtered.source = normalizeSource(
+        filtered.source,
+        !!req.file || hasUploadedReferenceFiles
+      );
     }
 
     if (filtered.title != null && !String(filtered.title).trim()) {
@@ -540,12 +644,13 @@ exports.update = async (req, res) => {
       filtered.title = String(filtered.title).trim();
     }
 
-    if (incomingHasDesignData || req.file) {
+    if (incomingHasDesignData || req.file || hasUploadedReferenceFiles) {
       filtered.design_data = mergeDesignData(
         incomingHasDesignData ? filtered.design_data : bp.design_data,
         {
           file_url: filtered.file_url || bp.file_url,
           file_type: filtered.file_type || bp.file_type,
+          reference_files: uploadedReferenceFiles,
         },
         filtered.title || bp.title
       );

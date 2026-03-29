@@ -692,6 +692,158 @@ function buildFurnitureTemplateParts({
   }
 }
 
+const IMPORT_TEMPLATE_DEFAULTS = {
+  template_closet_wardrobe: {
+    label: "Imported Closet / Wardrobe",
+    w: 2400,
+    h: 2400,
+    d: 600,
+  },
+  template_wardrobe: {
+    label: "Imported Wardrobe",
+    w: 1800,
+    h: 2200,
+    d: 600,
+  },
+  template_coffee_table: {
+    label: "Imported Coffee Table",
+    w: 1000,
+    h: 450,
+    d: 600,
+  },
+  template_dining_table: {
+    label: "Imported Dining Table",
+    w: 1800,
+    h: 760,
+    d: 900,
+  },
+  template_bed_frame: {
+    label: "Imported Bed Frame",
+    w: 1600,
+    h: 1100,
+    d: 2000,
+  },
+};
+
+function getImportedFurnitureTemplateType(savedData = {}, blueprintData = {}) {
+  return (
+    savedData?.importTemplateType ||
+    savedData?.import_type ||
+    blueprintData?.import_template_type ||
+    "template_closet_wardrobe"
+  );
+}
+
+function getImportedFurnitureDims(
+  savedData = {},
+  blueprintData = {},
+  templateType = "template_closet_wardrobe",
+) {
+  const defaults =
+    IMPORT_TEMPLATE_DEFAULTS[templateType] ||
+    IMPORT_TEMPLATE_DEFAULTS.template_closet_wardrobe;
+
+  const source =
+    savedData?.importDimensions ||
+    savedData?.referenceDimensions ||
+    blueprintData?.import_dimensions ||
+    blueprintData?.reference_dimensions ||
+    {};
+
+  return {
+    w: Math.max(
+      GRID_SIZE,
+      snap(Number(source.w ?? source.width ?? defaults.w) || defaults.w),
+    ),
+    h: Math.max(
+      GRID_SIZE,
+      snap(Number(source.h ?? source.height ?? defaults.h) || defaults.h),
+    ),
+    d: Math.max(
+      GRID_SIZE,
+      snap(Number(source.d ?? source.depth ?? defaults.d) || defaults.d),
+    ),
+  };
+}
+
+function scaleAssemblyComponentsToTarget(
+  baseParts,
+  targetDims,
+  originX,
+  originZ,
+  canvasH,
+  groupId,
+  groupLabel,
+  templateType,
+) {
+  const baseBounds = getComponentsBounds3D(baseParts);
+  if (!baseBounds) return [];
+
+  const floorY = canvasH - FLOOR_OFFSET;
+  const scaleX = targetDims.w / Math.max(baseBounds.width, 1);
+  const scaleY = targetDims.h / Math.max(baseBounds.height, 1);
+  const scaleZ = targetDims.d / Math.max(baseBounds.depth, 1);
+
+  return baseParts.map((part) =>
+    normalizeComponent({
+      ...part,
+      id: makeId(),
+      groupId,
+      groupLabel,
+      groupType: "assembly",
+      templateType,
+      x: originX + (part.x - baseBounds.minX) * scaleX,
+      y: floorY - targetDims.h + (part.y - baseBounds.minY) * scaleY,
+      z: originZ + (part.z - baseBounds.minZ) * scaleZ,
+      width: part.width * scaleX,
+      height: part.height * scaleY,
+      depth: part.depth * scaleZ,
+    }),
+  );
+}
+
+function createImportedFurnitureComponents(
+  savedData = {},
+  referenceFile = null,
+  blueprintData = {},
+  worldSize = { w: 6400, h: 3200, d: 5200 },
+) {
+  const templateType = getImportedFurnitureTemplateType(savedData, blueprintData);
+
+  const defaults =
+    IMPORT_TEMPLATE_DEFAULTS[templateType] ||
+    IMPORT_TEMPLATE_DEFAULTS.template_closet_wardrobe;
+
+  const groupId = makeGroupId();
+  const groupLabel =
+    blueprintData?.title || referenceFile?.name || defaults.label;
+
+  const dims = getImportedFurnitureDims(savedData, blueprintData, templateType);
+
+  const originX = snap((worldSize.w - dims.w) / 2);
+  const originZ = snap((worldSize.d - dims.d) / 2);
+
+  const baseParts = buildFurnitureTemplateParts({
+    templateType,
+    buildId: groupId,
+    originX: 0,
+    originZ: 0,
+    canvasH: worldSize.h,
+    groupLabel,
+  });
+
+  return scaleAssemblyComponentsToTarget(
+    baseParts,
+    dims,
+    originX,
+    originZ,
+    worldSize.h,
+    groupId,
+    groupLabel,
+    templateType,
+  );
+}
+
 function createDiningChairTemplateComponents(
   originX,
   originZ,
@@ -1311,4 +1463,5 @@ export {
   buildDiningChairParts,
   createImportedDiningChairComponents,
   createClosetWardrobeComponents,
+  createImportedFurnitureComponents,
 };

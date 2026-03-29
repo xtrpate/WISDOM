@@ -1,6 +1,6 @@
-// data/utils.js — Small shared utility functions
 const GRID_SIZE = 20;
 const MM_PER_INCH = 25.4;
+const REFERENCE_VIEWS = ["front", "back", "left", "right", "top"];
 
 function cloneComponents(list = []) {
   return JSON.parse(JSON.stringify(list || []));
@@ -67,11 +67,8 @@ function resolveAssetUrl(url) {
   if (!url) return "";
   if (/^https?:\/\//i.test(url)) return url;
 
-  const apiBase = String(api?.defaults?.baseURL || "");
-  const serverBase = apiBase.replace(/\/api\/?$/i, "");
   const normalizedPath = String(url).startsWith("/") ? String(url) : `/${url}`;
-
-  return serverBase ? `${serverBase}${normalizedPath}` : normalizedPath;
+  return normalizedPath;
 }
 
 function isImageReferenceFile(referenceFile) {
@@ -81,36 +78,93 @@ function isImageReferenceFile(referenceFile) {
   return ["png", "jpg", "jpeg", "svg", "webp"].includes(type);
 }
 
-function getReferenceFileFromBlueprint(savedData = {}, blueprintData = {}) {
-  // eto
-  const savedReference = savedData?.reference_file || savedData?.referenceFile;
-
-  if (
-    savedReference?.url &&
-    (savedReference?.type || savedReference?.file_type)
-  ) {
-    return {
-      url: savedReference.url,
-      type: String(
-        savedReference.type || savedReference.file_type,
-      ).toLowerCase(),
-      name: savedReference.name || blueprintData?.title || "Reference File",
-      source: savedReference.source || "imported",
-    };
-  }
-
-  if (blueprintData?.file_url && blueprintData?.file_type) {
-    return {
-      url: blueprintData.file_url,
-      type: String(blueprintData.file_type).toLowerCase(),
-      name: blueprintData.title || "Reference File",
-      source: blueprintData.source || "imported",
-    };
-  }
-
-  return null;
+function createEmptyReferenceFiles() {
+  return {
+    front: null,
+    back: null,
+    left: null,
+    right: null,
+    top: null,
+  };
 }
-function getEditorMode(savedData = {}, referenceFile = null) {
+
+function normalizeReferenceMeta(value, fallbackName = "Reference File") {
+  const url = value?.url || value?.file_url || null;
+  const type = String(value?.type || value?.file_type || "")
+    .trim()
+    .toLowerCase();
+
+  if (!url || !type) return null;
+
+  return {
+    url,
+    type,
+    name: value?.name || fallbackName,
+    source: value?.source || "imported",
+  };
+}
+
+function getReferenceFilesFromBlueprint(savedData = {}, blueprintData = {}) {
+  const next = createEmptyReferenceFiles();
+
+  const savedReferenceFiles =
+    savedData?.reference_files || savedData?.referenceFiles || {};
+
+  REFERENCE_VIEWS.forEach((view) => {
+    const normalized = normalizeReferenceMeta(
+      savedReferenceFiles?.[view],
+      `${blueprintData?.title || "Reference"} ${view}`,
+    );
+
+    if (normalized) {
+      next[view] = normalized;
+    }
+  });
+
+  const savedReference = normalizeReferenceMeta(
+    savedData?.reference_file || savedData?.referenceFile,
+    blueprintData?.title || "Reference File",
+  );
+
+  const blueprintReference =
+    blueprintData?.file_url && blueprintData?.file_type
+      ? normalizeReferenceMeta(
+          {
+            url: blueprintData.file_url,
+            type: blueprintData.file_type,
+            name: blueprintData.title || "Reference File",
+            source: blueprintData.source || "imported",
+          },
+          blueprintData?.title || "Reference File",
+        )
+      : null;
+
+  if (!next.front) {
+    next.front = savedReference || blueprintReference || null;
+  }
+
+  return next;
+}
+
+function getReferenceFileFromBlueprint(
+  savedData = {},
+  blueprintData = {},
+  preferredView = "front",
+) {
+  const referenceFiles = getReferenceFilesFromBlueprint(savedData, blueprintData);
+
+  return (
+    referenceFiles?.[preferredView] ||
+    referenceFiles?.front ||
+    referenceFiles?.back ||
+    referenceFiles?.left ||
+    referenceFiles?.right ||
+    referenceFiles?.top ||
+    null
+  );
+}
+
+function getEditorMode(savedData = {}, referenceSource = null) {
   if (
     savedData?.editorMode === "reference" ||
     savedData?.editorMode === "editable"
@@ -122,7 +176,15 @@ function getEditorMode(savedData = {}, referenceFile = null) {
     return "editable";
   }
 
-  if (referenceFile?.url) {
+  if (referenceSource?.url) {
+    return "reference";
+  }
+
+  if (
+    referenceSource &&
+    typeof referenceSource === "object" &&
+    Object.values(referenceSource).some((item) => item?.url)
+  ) {
     return "reference";
   }
 
@@ -143,6 +205,8 @@ export {
   getNowStamp,
   resolveAssetUrl,
   isImageReferenceFile,
+  createEmptyReferenceFiles,
+  getReferenceFilesFromBlueprint,
   getReferenceFileFromBlueprint,
   getEditorMode,
 };

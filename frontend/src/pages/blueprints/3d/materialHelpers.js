@@ -10,8 +10,23 @@ import { getWoodFinish } from "../data/componentUtils";
 import { clamp } from "../data/utils";
 import { createRoundedBoxGeometry } from "./cornerRadius";
 
+function toneHex(color, amount = 0) {
+  const c = new THREE.Color(color || "#d9c2a5");
+
+  if (amount >= 0) {
+    c.lerp(new THREE.Color("#ffffff"), Math.min(1, amount));
+  } else {
+    c.lerp(new THREE.Color("#000000"), Math.min(1, Math.abs(amount)));
+  }
+
+  return `#${c.getHexString()}`;
+}
+
 function getMaterialPalette(comp) {
   const finish = comp.finish ? getWoodFinish(comp.finish) : null;
+  const type = String(comp.type || "").toLowerCase();
+  const material = String(comp.material || "").toLowerCase();
+  const baseFill = comp.fill || "#d9c2a5";
 
   if (finish) {
     return {
@@ -24,7 +39,17 @@ function getMaterialPalette(comp) {
     };
   }
 
-  const material = String(comp.material || "").toLowerCase();
+  // wardrobe parts — respect the actual fill color
+  if (type.startsWith("wr_")) {
+    return {
+      front: baseFill,
+      carcass: toneHex(baseFill, -0.16),
+      inside: toneHex(baseFill, 0.14),
+      edge: toneHex(baseFill, 0.26),
+      fabric: baseFill,
+      accent: toneHex(baseFill, -0.26),
+    };
+  }
 
   if (material.includes("solid surface")) {
     return {
@@ -38,13 +63,14 @@ function getMaterialPalette(comp) {
   }
 
   if (material.includes("metal")) {
+    const metalBase = comp.fill || "#c9ced6";
     return {
-      front: "#a3b2c6",
-      carcass: "#64748b",
-      inside: "#d8e0ea",
-      edge: "#eef3f8",
-      fabric: "#cbd5e1",
-      accent: "#1f2937",
+      front: metalBase,
+      carcass: toneHex(metalBase, -0.18),
+      inside: toneHex(metalBase, 0.14),
+      edge: toneHex(metalBase, 0.28),
+      fabric: metalBase,
+      accent: toneHex(metalBase, -0.32),
     };
   }
 
@@ -61,12 +87,12 @@ function getMaterialPalette(comp) {
 
   if (material.includes("laminated")) {
     return {
-      front: "#e6dacd",
-      carcass: "#9d7a5a",
-      inside: "#f6ebdf",
-      edge: "#fff7ef",
-      fabric: "#f1e4d5",
-      accent: "#7c5d42",
+      front: baseFill,
+      carcass: toneHex(baseFill, -0.14),
+      inside: toneHex(baseFill, 0.12),
+      edge: toneHex(baseFill, 0.24),
+      fabric: toneHex(baseFill, 0.06),
+      accent: toneHex(baseFill, -0.24),
     };
   }
 
@@ -76,22 +102,22 @@ function getMaterialPalette(comp) {
     material.includes("teak")
   ) {
     return {
-      front: comp.fill || "#d6b38a",
-      carcass: "#a7794d",
-      inside: "#ead1b8",
-      edge: "#f6e7d6",
-      fabric: "#d6b38a",
-      accent: "#6f4e37",
+      front: baseFill,
+      carcass: toneHex(baseFill, -0.14),
+      inside: toneHex(baseFill, 0.16),
+      edge: toneHex(baseFill, 0.28),
+      fabric: baseFill,
+      accent: toneHex(baseFill, -0.24),
     };
   }
 
   return {
-    front: comp.fill || "#d9c2a5",
-    carcass: "#8b6b4a",
-    inside: "#efe4d6",
-    edge: "#f9eddf",
-    fabric: "#d9c2a5",
-    accent: "#6b4f37",
+    front: baseFill,
+    carcass: toneHex(baseFill, -0.14),
+    inside: toneHex(baseFill, 0.14),
+    edge: toneHex(baseFill, 0.26),
+    fabric: baseFill,
+    accent: toneHex(baseFill, -0.24),
   };
 }
 

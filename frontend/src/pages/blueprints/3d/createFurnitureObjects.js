@@ -6,6 +6,7 @@ import {
   addEdgeHighlight,
   addBoxPart,
   addRoundedPanel,
+  addCylinderPart,
 } from "./materialHelpers";
 import {
   buildCasework3D,
@@ -26,6 +27,324 @@ import { CASEWORK_SET, TABLE_SET, BENCH_SET } from "../data/furnitureTypes";
 import { createDiningChairTemplateComponents } from "../data/templateComponents";
 
 const FLOOR_OFFSET = 40;
+
+const WARDROBE_PART_SET = new Set([
+  "wr_side_panel",
+  "wr_divider",
+  "wr_back_panel",
+  "wr_top_panel",
+  "wr_bottom_panel",
+  "wr_top_shelf",
+  "wr_shelf",
+  "wr_base_top",
+  "wr_drawer_front",
+  "wr_drawer_side",
+  "wr_drawer_back",
+  "wr_drawer_bottom",
+  "wr_drawer_handle",
+  "wr_rod",
+  "wr_support_panel",
+  "wr_table",
+]);
+
+function toneColor(color, amount = 0) {
+  const c = new THREE.Color(color || "#c08a5a");
+
+  if (amount >= 0) {
+    c.lerp(new THREE.Color("#ffffff"), Math.min(1, amount));
+  } else {
+    c.lerp(new THREE.Color("#000000"), Math.min(1, Math.abs(amount)));
+  }
+
+  return c;
+}
+
+function makeWardrobeMaterial(color, overrides = {}) {
+  return new THREE.MeshPhysicalMaterial({
+    color: toneColor(color, 0),
+    roughness: 0.48,
+    metalness: 0.03,
+    clearcoat: 0.18,
+    clearcoatRoughness: 0.34,
+    ...overrides,
+  });
+}
+
+function buildWardrobePart3D(root, selectableMeshes, comp, palette, r = 0) {
+  const w = comp.width;
+  const h = comp.height;
+  const d = comp.depth;
+
+  const base = comp.fill || palette.front || "#bc8756";
+
+  const faceMat = makeWardrobeMaterial(base, {
+    roughness: 0.42,
+    clearcoat: 0.24,
+  });
+
+  const carcassMat = makeWardrobeMaterial(base, {
+    color: toneColor(base, -0.14),
+    roughness: 0.58,
+    clearcoat: 0.12,
+  });
+
+  const edgeMat = makeWardrobeMaterial(base, {
+    color: toneColor(base, 0.18),
+    roughness: 0.38,
+    clearcoat: 0.28,
+  });
+
+  const backMat = new THREE.MeshStandardMaterial({
+    color: toneColor(base, -0.08),
+    roughness: 0.92,
+    metalness: 0.02,
+  });
+
+  const drawerBoxMat = new THREE.MeshStandardMaterial({
+    color: toneColor(base, -0.24),
+    roughness: 0.88,
+    metalness: 0.02,
+  });
+
+  const metalMat = new THREE.MeshPhysicalMaterial({
+    color: toneColor(comp.fill || "#c9ced6", 0),
+    roughness: 0.22,
+    metalness: 0.92,
+    clearcoat: 0.48,
+    clearcoatRoughness: 0.12,
+  });
+
+  if (comp.type === "wr_rod") {
+    const radius = Math.max(4, Math.min(h, d) * 0.28);
+
+    const bar = addCylinderPart(
+      root,
+      selectableMeshes,
+      radius,
+      radius,
+      w,
+      28,
+      [0, 0, 0],
+      metalMat,
+      comp.id,
+    );
+    bar.rotation.z = Math.PI / 2;
+
+    const bracketOffset = w / 2 - 10;
+    const bracketW = 8;
+    const bracketH = Math.max(10, radius * 1.6);
+    const bracketD = Math.max(12, radius * 2);
+
+    addBoxPart(
+      root,
+      selectableMeshes,
+      [bracketW, bracketH, bracketD],
+      [-bracketOffset, 0, 0],
+      metalMat,
+      comp.id,
+      false,
+      2,
+    );
+
+    addBoxPart(
+      root,
+      selectableMeshes,
+      [bracketW, bracketH, bracketD],
+      [bracketOffset, 0, 0],
+      metalMat,
+      comp.id,
+      false,
+      2,
+    );
+
+    return true;
+  }
+
+  if (comp.type === "wr_drawer_handle") {
+    const barH = Math.max(6, h * 0.45);
+    const barD = Math.max(6, d * 0.45);
+    const postW = 6;
+    const postH = Math.max(6, h * 0.4);
+    const postD = Math.max(10, d * 0.8);
+    const postOffset = Math.max(18, w * 0.28);
+
+    addBoxPart(
+      root,
+      selectableMeshes,
+      [w, barH, barD],
+      [0, 0, barD * 0.3],
+      metalMat,
+      comp.id,
+      false,
+      3,
+    );
+
+    addBoxPart(
+      root,
+      selectableMeshes,
+      [postW, postH, postD],
+      [-postOffset, 0, -postD * 0.15],
+      metalMat,
+      comp.id,
+      false,
+      2,
+    );
+
+    addBoxPart(
+      root,
+      selectableMeshes,
+      [postW, postH, postD],
+      [postOffset, 0, -postD * 0.15],
+      metalMat,
+      comp.id,
+      false,
+      2,
+    );
+
+    return true;
+  }
+
+  if (
+    comp.type === "wr_side_panel" ||
+    comp.type === "wr_divider" ||
+    comp.type === "wr_support_panel"
+  ) {
+    const body = addBoxPart(
+      root,
+      selectableMeshes,
+      [w, h, d],
+      [0, 0, 0],
+      carcassMat,
+      comp.id,
+      true,
+      Math.min(r, 3),
+    );
+
+    addBoxPart(
+      root,
+      selectableMeshes,
+      [w, h, 8],
+      [0, 0, d / 2 - 4],
+      edgeMat,
+      comp.id,
+      false,
+      2,
+    );
+
+    addEdgeHighlight(root, body, toneColor(base, 0.26).getHex(), 0.08);
+    return true;
+  }
+
+  if (comp.type === "wr_back_panel") {
+    const body = addBoxPart(
+      root,
+      selectableMeshes,
+      [w, h, Math.max(8, d)],
+      [0, 0, 0],
+      backMat,
+      comp.id,
+      false,
+      0,
+    );
+
+    addEdgeHighlight(root, body, toneColor(base, 0.18).getHex(), 0.04);
+    return true;
+  }
+
+    if (
+    comp.type === "wr_top_panel" ||
+    comp.type === "wr_bottom_panel" ||
+    comp.type === "wr_top_shelf" ||
+    comp.type === "wr_shelf" ||
+    comp.type === "wr_base_top" ||
+    comp.type === "wr_table"
+    ) {
+    const body = addBoxPart(
+      root,
+      selectableMeshes,
+      [w, h, d],
+      [0, 0, 0],
+      faceMat,
+      comp.id,
+      true,
+      Math.min(r, 3),
+    );
+
+    addBoxPart(
+      root,
+      selectableMeshes,
+      [w, h, 8],
+      [0, 0, d / 2 - 4],
+      edgeMat,
+      comp.id,
+      false,
+      2,
+    );
+
+    addEdgeHighlight(root, body, toneColor(base, 0.24).getHex(), 0.06);
+    return true;
+  }
+
+  if (comp.type === "wr_drawer_front") {
+    const body = addBoxPart(
+      root,
+      selectableMeshes,
+      [w, h, Math.max(18, d)],
+      [0, 0, 0],
+      faceMat,
+      comp.id,
+      true,
+      3,
+    );
+
+    addBoxPart(
+      root,
+      selectableMeshes,
+      [Math.max(40, w - 16), Math.max(40, h - 16), 4],
+      [0, 0, d / 2 - 2],
+      edgeMat,
+      comp.id,
+      false,
+      2,
+    );
+
+    addEdgeHighlight(root, body, toneColor(base, 0.24).getHex(), 0.08);
+    return true;
+  }
+
+  if (
+    comp.type === "wr_drawer_side" ||
+    comp.type === "wr_drawer_back" ||
+    comp.type === "wr_drawer_bottom"
+  ) {
+    addBoxPart(
+      root,
+      selectableMeshes,
+      [w, h, d],
+      [0, 0, 0],
+      drawerBoxMat,
+      comp.id,
+      true,
+      0,
+    );
+
+    return true;
+  }
+
+  const body = addBoxPart(
+    root,
+    selectableMeshes,
+    [w, h, d],
+    [0, 0, 0],
+    faceMat,
+    comp.id,
+    true,
+    Math.min(r, 2),
+  );
+
+  addEdgeHighlight(root, body, toneColor(base, 0.24).getHex(), 0.06);
+  return true;
+}
 
 function createFurnitureObject(comp, selected, editing, selectableMeshes) {
   const root = new THREE.Group();
@@ -58,6 +377,10 @@ function createFurnitureObject(comp, selected, editing, selectableMeshes) {
     clearcoatRoughness: 0.22,
   });
 
+  if (WARDROBE_PART_SET.has(comp.type)) {
+    buildWardrobePart3D(root, selectableMeshes, comp, palette, r);
+    return root;
+  }
   if (comp.type === "chair_seat_panel") {
     const seat = addRoundedPanel(
       root,

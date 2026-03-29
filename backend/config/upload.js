@@ -54,11 +54,46 @@ exports.uploadProductImage = multer({
   limits: { fileSize: MAX_MB * 1024 * 1024 },
 }).single('image');
 
-exports.uploadBlueprintFile = multer({
+const blueprintUpload = multer({
   storage: diskStorage('blueprints'),
   fileFilter: fileFilter(ALLOWED_BLUEPRINTS, 'Blueprint file'),
   limits: { fileSize: MAX_MB * 1024 * 1024 },
-}).single('file');
+}).fields([
+  { name: 'file', maxCount: 1 },
+  { name: 'reference_file', maxCount: 1 },
+
+  { name: 'front_reference', maxCount: 1 },
+  { name: 'back_reference', maxCount: 1 },
+  { name: 'left_reference', maxCount: 1 },
+  { name: 'right_reference', maxCount: 1 },
+  { name: 'top_reference', maxCount: 1 },
+]);
+
+exports.uploadBlueprintFile = (req, res, next) => {
+  blueprintUpload(req, res, (err) => {
+    if (err) return next(err);
+
+    req.referenceFiles = {
+      front:
+        req.files?.front_reference?.[0] ||
+        req.files?.reference_file?.[0] ||
+        req.files?.file?.[0] ||
+        null,
+      back: req.files?.back_reference?.[0] || null,
+      left: req.files?.left_reference?.[0] || null,
+      right: req.files?.right_reference?.[0] || null,
+      top: req.files?.top_reference?.[0] || null,
+    };
+
+    req.file =
+      req.referenceFiles.front ||
+      req.files?.reference_file?.[0] ||
+      req.files?.file?.[0] ||
+      null;
+
+    next();
+  });
+};
 
 exports.uploadPaymentProof = multer({
   storage: diskStorage('payments'),

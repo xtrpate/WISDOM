@@ -361,6 +361,15 @@ function Canvas2D({
   blueprintTitle,
   unit,
   referenceFile,
+  editorMode,
+  referenceCalibration,
+  setReferenceCalibration,
+  traceObjects,
+  setTraceObjects,
+  traceTool,
+  selectedTraceId,
+  setSelectedTraceId,
+  newTraceType,
 }) {
   const drawingArea = {
     x: PAPER_MARGIN + DRAWING_PADDING,
@@ -369,6 +378,163 @@ function Canvas2D({
     h: canvasH - PAPER_MARGIN * 2 - TITLE_BLOCK_H - DRAWING_PADDING * 1.45,
   };
 
+  const stageRef = useRef(null);
+  const [draftTrace, setDraftTrace] = React.useState(null);
+  const normalizeProjectionView = (rawView = "front") => {
+    if (rawView === "back") return "front";
+    if (rawView === "right") return "left";
+    if (rawView === "top") return "top";
+    return "front";
+  };
+
+  const activeProjectionView = normalizeProjectionView(view);
+
+  const activeCalibration =
+    referenceCalibration && typeof referenceCalibration === "object"
+      ? referenceCalibration
+      : {
+          points: [],
+          realDistanceMm: 0,
+          pixelsPerMm: 0,
+          isCalibrated: false,
+        };
+
+  const visibleTraceObjects = Array.isArray(traceObjects) ? traceObjects : [];
+
+  const getPointerPos = () => {
+    const stage = stageRef.current;
+    if (!stage) return null;
+    const p = stage.getPointerPosition();
+    if (!p) return null;
+    return {
+      x: snap(clamp(p.x, drawingArea.x, drawingArea.x + drawingArea.w)),
+      y: snap(clamp(p.y, drawingArea.y, drawingArea.y + drawingArea.h)),
+    };
+  };
+
+
+  const handleStageMouseDown = () => {
+    if (editorMode !== "reference") return;
+    if (!["front", "back", "left", "right", "top"].includes(view)) return;
+
+    const pos = getPointerPos();
+    if (!pos) return;
+
+    if (traceTool === "select") {
+      setSelectedTraceId?.(null);
+      return;
+    }
+
+    if (traceTool === "calibrate") {
+      const currentPoints = Array.isArray(activeCalibration?.points)
+        ? activeCalibration.points
+        : [];
+
+      const nextPoints = [...currentPoints, pos].slice(-2);
+
+      if (nextPoints.length < 2) {
+        setReferenceCalibration({
+          points: nextPoints,
+          realDistanceMm: Number(activeCalibration?.realDistanceMm || 0),
+          pixelsPerMm: Number(activeCalibration?.pixelsPerMm || 0),
+          isCalibrated: false,
+        });
+        return;
+      }
+
+      const dx = Number(nextPoints[1].x) - Number(nextPoints[0].x);
+      const dy = Number(nextPoints[1].y) - Number(nextPoints[0].y);
+      const pixelDistance = Math.sqrt(dx * dx + dy * dy);
+
+      const input = window.prompt(
+        "Enter real distance in mm for the selected line:",
+        String(Math.round(activeCalibration?.realDistanceMm || 2400)),
+      );
+
+      const realDistanceMm = Number(input);
+
+      if (!realDistanceMm || realDistanceMm <= 0 || !pixelDistance) {
+        window.alert("Invalid measurement.");
+        setReferenceCalibration({
+          points: [],
+          realDistanceMm: 0,
+          pixelsPerMm: 0,
+          isCalibrated: false,
+        });
+        return;
+      }
+
+      const pixelsPerMm = pixelDistance / realDistanceMm;
+
+      setReferenceCalibration({
+        points: nextPoints,
+        realDistanceMm,
+        pixelsPerMm,
+        isCalibrated: pixelsPerMm > 0,
+      });
+
+      return;
+    }
+
+    if (traceTool === "rect") {
+      setSelectedTraceId?.(null);
+
+      const traceType = newTraceType || "door";
+
+      setDraftTrace({
+        id: `trace_${Date.now()}`,
+        x: pos.x,
+        y: pos.y,
+        width: 0,
+        height: 0,
+        type: traceType,
+        traceType,
+        traceView: view,
+        view,
+        projectionView: activeProjectionView,
+      });
+    }
+  };
+
+  const handleStageMouseMove = () => {
+    if (!draftTrace) return;
+    const pos = getPointerPos();
+    if (!pos) return;
+
+    setDraftTrace((prev) =>
+      prev
+        ? {
+            ...prev,
+            width: pos.x - prev.x,
+            height: pos.y - prev.y,
+          }
+        : prev,
+    );
+  };
+
+
+  const handleStageMouseUp = () => {
+    if (!draftTrace) return;
+
+    const normalized = {
+      ...draftTrace,
+      x: Math.min(draftTrace.x, draftTrace.x + draftTrace.width),
+      y: Math.min(draftTrace.y, draftTrace.y + draftTrace.height),
+      width: Math.abs(draftTrace.width),
+      height: Math.abs(draftTrace.height),
+      traceView: draftTrace.traceView || view,
+      projectionView: draftTrace.projectionView || activeProjectionView,
+    };
+
+    if (normalized.width >= 20 && normalized.height >= 20) {
+      setTraceObjects((prev) => [
+        ...(Array.isArray(prev) ? prev : []),
+        normalized,
+      ]);
+    }
+
+    setDraftTrace(null);
+  };
   const referenceUrl = useMemo(
     () => resolveAssetUrl(referenceFile?.url || ""),
     [referenceFile],
@@ -520,7 +686,14 @@ function Canvas2D({
       : formatDim(selectedBounds3D?.height || 0, unit);
 
   return (
-    <Stage width={canvasW} height={canvasH}>
+    <Stage
+      ref={stageRef}
+      width={canvasW}
+      height={canvasH}
+      onMouseDown={handleStageMouseDown}
+      onMouseMove={handleStageMouseMove}
+      onMouseUp={handleStageMouseUp}
+    >
       <Layer>
         <BlueprintPaper canvasW={canvasW} canvasH={canvasH} />
         {referenceImage && referenceImageBox && (
@@ -816,7 +989,64 @@ function Canvas2D({
             />
           </>
         )}
+        {visibleTraceObjects.map((obj) => {
+          const isSelected = obj.id === selectedTraceId;
 
+          return (
+            <Rect
+              key={obj.id}
+              x={obj.x}
+              y={obj.y}
+              width={obj.width}
+              height={obj.height}
+              stroke={isSelected ? "#f97316" : "#ef4444"}
+              strokeWidth={2}
+              dash={[6, 4]}
+              fill={isSelected ? "rgba(249,115,22,0.10)" : "rgba(239,68,68,0.06)"}
+              onClick={(e) => {
+                e.cancelBubble = true;
+                setSelectedTraceId?.(obj.id);
+              }}
+            />
+          );
+        })}
+
+        {draftTrace && (
+          <Rect
+            x={Math.min(draftTrace.x, draftTrace.x + draftTrace.width)}
+            y={Math.min(draftTrace.y, draftTrace.y + draftTrace.height)}
+            width={Math.abs(draftTrace.width)}
+            height={Math.abs(draftTrace.height)}
+            stroke="#f59e0b"
+            strokeWidth={2}
+            dash={[6, 4]}
+            fill="rgba(245,158,11,0.06)"
+          />
+        )}
+        {activeCalibration?.points?.map((p, i) => (
+          <Circle
+            key={`cal-${i}`}
+            x={p.x}
+            y={p.y}
+            radius={5}
+            fill="#2563eb"
+          />
+        ))}
+
+        {activeCalibration?.points?.length === 2 && (
+          <Line
+            points={[
+              activeCalibration.points[0].x,
+              activeCalibration.points[0].y,
+              activeCalibration.points[1].x,
+              activeCalibration.points[1].y,
+            ]}
+            stroke="#2563eb"
+            strokeWidth={2}
+            dash={[4, 4]}
+          />
+        )}
+        
         <BlueprintTitleBlock
           canvasW={canvasW}
           canvasH={canvasH}

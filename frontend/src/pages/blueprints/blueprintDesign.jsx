@@ -66,6 +66,8 @@ import {
   getNowStamp,
   resolveAssetUrl,
   isImageReferenceFile,
+  createEmptyReferenceFiles,
+  getReferenceFilesFromBlueprint,
   getReferenceFileFromBlueprint,
   getEditorMode,
 } from "./data/utils";
@@ -81,6 +83,7 @@ import {
   createDiningChairTemplateComponents,
   buildFurnitureTemplateParts,
   buildDiningChairParts,
+  createImportedFurnitureComponents,
   createImportedDiningChairComponents,
 } from "./data/templateComponents";
 
@@ -108,6 +111,8 @@ import { ThreeDViewer } from "./3d/threeDViewer";
 // ── Styles ────────────────────────────────────────────────────────────────────
 import S from "./styles/blueprintStyles";
 
+
+
 // ── Constants ─────────────────────────────────────────────────────────────────
 const GRID_SIZE = 20;
 const BOARD = 18;
@@ -121,6 +126,287 @@ const EXPORT_PAGE_H = 820;
 const WORLD_W = 8000;
 const WORLD_H = 5000;
 const WORLD_D = 8000;
+
+const DEFAULT_IMPORT_TEMPLATE_TYPE = "template_closet_wardrobe";
+const DEFAULT_IMPORT_DIMENSIONS = { w: 2400, h: 2400, d: 600 };
+
+const DEFAULT_AI3D_STATE = {
+  status: "idle",
+  provider: "meshy",
+  providerStatus: "",
+  taskId: "",
+  modelUrl: "",
+  previewUrl: "",
+  format: "glb",
+  progress: 0,
+  sourceImageUrl: "",
+  errorMessage: "",
+  requestedAt: "",
+  finishedAt: "",
+  lastCheckedAt: "",
+};
+
+const AI3D_STATUS_LABELS = {
+  idle: "Idle",
+  queued: "Queued",
+  processing: "Processing",
+  done: "Ready",
+  error: "Error",
+};
+const TRACE_TYPE_OPTIONS = [
+  { value: "drawer", label: "Drawer Section" },
+  { value: "door", label: "Door Section" },
+  { value: "body", label: "Body Only" },
+];
+
+const TRACE_TYPE_LABELS = {
+  drawer: "Drawer Section",
+  door: "Door Section",
+  body: "Body Only",
+};
+
+const REFERENCE_TRACE_VIEWS = ["front", "back", "left", "right", "top"];
+
+function createEmptyReferenceCalibrationByView() {
+  return REFERENCE_TRACE_VIEWS.reduce((acc, viewKey) => {
+    acc[viewKey] = normalizeReferenceCalibration();
+    return acc;
+  }, {});
+}
+
+function createEmptyTraceObjectsByView() {
+  return REFERENCE_TRACE_VIEWS.reduce((acc, viewKey) => {
+    acc[viewKey] = [];
+    return acc;
+  }, {});
+}
+
+function normalizeReferenceCalibrationByView(value = {}) {
+  const next = createEmptyReferenceCalibrationByView();
+
+  const hasViewMap =
+    value &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    REFERENCE_TRACE_VIEWS.some((viewKey) => value?.[viewKey]);
+
+  if (hasViewMap) {
+    REFERENCE_TRACE_VIEWS.forEach((viewKey) => {
+      next[viewKey] = normalizeReferenceCalibration(value?.[viewKey]);
+    });
+    return next;
+  }
+
+  next.front = normalizeReferenceCalibration(value);
+  return next;
+}
+
+function normalizeTraceObjectsByView(value = {}) {
+  const next = createEmptyTraceObjectsByView();
+
+  if (Array.isArray(value)) {
+    value.forEach((item) => {
+      const viewKey = normalizeTraceView(
+        item?.view || item?.traceView || item?.projectionView || "front",
+      );
+      next[viewKey].push(normalizeTraceObject(item, viewKey));
+    });
+    return next;
+  }
+
+  REFERENCE_TRACE_VIEWS.forEach((viewKey) => {
+    next[viewKey] = normalizeTraceObjects(value?.[viewKey], viewKey);
+  });
+
+  return next;
+}
+
+function flattenTraceObjectsByView(value = {}) {
+  return REFERENCE_TRACE_VIEWS.flatMap((viewKey) =>
+    normalizeTraceObjects(value?.[viewKey], viewKey),
+  );
+}
+
+
+function normalizeAi3dState(value = {}) {
+  const next =
+    value && typeof value === "object" && !Array.isArray(value) ? value : {};
+
+  return {
+    ...DEFAULT_AI3D_STATE,
+    ...next,
+  };
+}
+
+function normalizeReferenceCalibration(value = {}) {
+  const rawPoints = Array.isArray(value?.points) ? value.points.slice(0, 2) : [];
+
+  const points = rawPoints
+    .map((point) => ({
+      x: Number(point?.x) || 0,
+      y: Number(point?.y) || 0,
+    }))
+    .filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y));
+
+  const realDistanceMm = Math.max(0, Number(value?.realDistanceMm) || 0);
+  const pixelsPerMm = Math.max(0, Number(value?.pixelsPerMm) || 0);
+
+  return {
+    points,
+    realDistanceMm,
+    pixelsPerMm,
+    isCalibrated:
+      points.length === 2 &&
+      realDistanceMm > 0 &&
+      pixelsPerMm > 0 &&
+      Boolean(value?.isCalibrated),
+  };
+}
+
+function normalizeTraceView(rawView = "front") {
+  const value = String(rawView || "front").toLowerCase();
+
+  if (value === "back") return "back";
+  if (value === "left") return "left";
+  if (value === "right") return "right";
+  if (value === "top") return "top";
+  return "front";
+}
+
+function normalizeProjectionView(rawView = "front") {
+  const value = normalizeTraceView(rawView);
+
+  if (value === "back") return "front";
+  if (value === "right") return "left";
+  return value;
+}
+
+function normalizeTraceObject(obj = {}, fallbackView = "front") {
+  const view = normalizeTraceView(
+    obj?.view || obj?.traceView || obj?.projectionView || fallbackView,
+  );
+
+  const type = ["drawer", "door", "body"].includes(obj?.type)
+    ? obj.type
+    : ["drawer", "door", "body"].includes(obj?.traceType)
+      ? obj.traceType
+      : "door";
+
+  const width = Math.max(GRID_SIZE, snap(Number(obj?.width) || 0));
+  const height = Math.max(GRID_SIZE, snap(Number(obj?.height) || 0));
+
+  return {
+    id: obj?.id || makeId(),
+    type,
+    traceType: type,
+    label: obj?.label || TRACE_TYPE_LABELS[type] || "Trace Object",
+    x: snap(Number(obj?.x) || 0),
+    y: snap(Number(obj?.y) || 0),
+    width,
+    height,
+    view,
+    traceView: view,
+    projectionView: normalizeProjectionView(view),
+  };
+}
+
+function normalizeTraceObjects(list = [], fallbackView = "front") {
+  if (!Array.isArray(list)) return [];
+
+  return list
+    .map((item) => normalizeTraceObject(item, fallbackView))
+    .filter((item) => item.width > 0 && item.height > 0);
+}
+
+function sanitizeReferenceFile(file) {
+  if (!file?.url) return null;
+
+  const type = String(file?.type || file?.file_type || "")
+    .trim()
+    .toLowerCase();
+
+  if (!type) return null;
+
+  return {
+    url: file.url,
+    type,
+    name: file.name || "Reference File",
+    source: file.source || "imported",
+  };
+}
+function isLikelyChairReference({
+  importTemplateType,
+  importDimensions,
+  traceObjectsByView,
+}) {
+  const dims = {
+    w: Number(importDimensions?.w) || 0,
+    h: Number(importDimensions?.h) || 0,
+    d: Number(importDimensions?.d) || 0,
+  };
+
+  const perViewCounts = REFERENCE_TRACE_VIEWS.map(
+    (viewKey) => (traceObjectsByView?.[viewKey] || []).length,
+  );
+
+  const hasSingleOutlinePerView = perViewCounts.every((count) => count === 1);
+
+  const compactChairSized =
+    dims.w > 0 &&
+    dims.h > 0 &&
+    dims.d > 0 &&
+    dims.w <= 1100 &&
+    dims.h <= 1400 &&
+    dims.d <= 1100;
+
+  const explicitChairTemplate = [
+    "chair_template",
+    "template_dining_chair",
+    "template_accent_chair",
+    "template_lounge_chair",
+  ].includes(importTemplateType);
+
+  return explicitChairTemplate || (compactChairSized && hasSingleOutlinePerView);
+}
+
+function sanitizeReferenceFiles(files = {}) {
+  return {
+    front: sanitizeReferenceFile(files?.front),
+    back: sanitizeReferenceFile(files?.back),
+    left: sanitizeReferenceFile(files?.left),
+    right: sanitizeReferenceFile(files?.right),
+    top: sanitizeReferenceFile(files?.top),
+  };
+}
+
+function resolveImportTemplateType(savedData = {}, blueprintData = {}) {
+  return (
+    savedData?.importTemplateType ||
+    savedData?.import_type ||
+    blueprintData?.import_template_type ||
+    DEFAULT_IMPORT_TEMPLATE_TYPE
+  );
+}
+
+function sanitizeImportDimensions(
+  source = {},
+  fallback = DEFAULT_IMPORT_DIMENSIONS,
+) {
+  return {
+    w: Math.max(
+      GRID_SIZE,
+      snap(Number(source?.w ?? source?.width ?? fallback.w) || fallback.w),
+    ),
+    h: Math.max(
+      GRID_SIZE,
+      snap(Number(source?.h ?? source?.height ?? fallback.h) || fallback.h),
+    ),
+    d: Math.max(
+      GRID_SIZE,
+      snap(Number(source?.d ?? source?.depth ?? fallback.d) || fallback.d),
+    ),
+  };
+}
 
 const deepClone = (value) => JSON.parse(JSON.stringify(value));
 
@@ -219,14 +505,34 @@ export default function BlueprintDesign() {
   const [transformMode, setTransformMode] = useState("translate");
   const [unit, setUnit] = useState("mm");
   const [activeChairBuild, setActiveChairBuild] = useState(null);
+  const [referenceFiles, setReferenceFiles] = useState(createEmptyReferenceFiles());
   const [referenceFile, setReferenceFile] = useState(null);
   const [editorMode, setEditorMode] = useState("editable");
-
+  const [importTemplateType, setImportTemplateType] = useState(
+    DEFAULT_IMPORT_TEMPLATE_TYPE,
+  );
+  const [importDimensions, setImportDimensions] = useState(
+    DEFAULT_IMPORT_DIMENSIONS,
+  );
+  const [importComments, setImportComments] = useState("");
+  const [ai3dState, setAi3dState] = useState(DEFAULT_AI3D_STATE);
+  
   // ── Undo / Redo history ──────────────────────────────────────────────────
   const historyRef = useRef([]); // past snapshots
   const futureRef = useRef([]); // redo snapshots
   const skipHistoryRef = useRef(false); // skip next push (used on undo/redo itself)
+  const [referenceCalibrationByView, setReferenceCalibrationByView] = useState(
+  createEmptyReferenceCalibrationByView(),
+  );
 
+  const [traceObjectsByView, setTraceObjectsByView] = useState(
+    createEmptyTraceObjectsByView(),
+  );
+
+  
+  const [traceTool, setTraceTool] = useState("select");
+  const [selectedTraceId, setSelectedTraceId] = useState(null);
+  const [newTraceType, setNewTraceType] = useState("door");
   // Call this before any destructive setComponents to record the current state
   const pushHistory = useCallback((snapshot) => {
     if (skipHistoryRef.current) return;
@@ -302,14 +608,22 @@ export default function BlueprintDesign() {
 
   useEffect(() => {
     if (!id || id === "new") {
-      setReferenceFile(null);
-      setEditorMode("editable");
-      setView("3d");
-      setComponents([]);
-      setSelectedId(null);
-      setEdit3DId(null);
-      return;
-    }
+    setReferenceFiles(createEmptyReferenceFiles());
+    setReferenceFile(null);
+    setEditorMode("editable");
+    setImportTemplateType(DEFAULT_IMPORT_TEMPLATE_TYPE);
+    setImportDimensions(DEFAULT_IMPORT_DIMENSIONS);
+    setImportComments("");
+    setAi3dState(DEFAULT_AI3D_STATE);
+    setView("3d");
+    setComponents([]);
+    setSelectedId(null);
+    setEdit3DId(null);
+    setReferenceCalibrationByView(createEmptyReferenceCalibrationByView());
+    setTraceObjectsByView(createEmptyTraceObjectsByView());
+    setSelectedTraceId(null);
+    return;
+  }
 
     api
       .get(`/blueprints/${id}`)
@@ -333,17 +647,26 @@ export default function BlueprintDesign() {
           saved = {};
         }
 
-        saved.importDimensions = {
-          w: 460,
-          h: 920,
-          d: 520,
-        };
+        const loadedTemplateType = resolveImportTemplateType(saved, r.data);
+        const loadedImportDimensions = sanitizeImportDimensions(
+          saved.importDimensions ||
+            saved.referenceDimensions ||
+            r.data.import_dimensions ||
+            r.data.reference_dimensions ||
+            DEFAULT_IMPORT_DIMENSIONS,
+          DEFAULT_IMPORT_DIMENSIONS,
+        );
 
-        const refFile = getReferenceFileFromBlueprint(saved, r.data);
-        const resolvedMode = getEditorMode(saved, refFile);
+        const loadedReferenceFiles = getReferenceFilesFromBlueprint(saved, r.data);
+        const refFile = getReferenceFileFromBlueprint(saved, r.data, "front");
+        const resolvedMode = getEditorMode(saved, loadedReferenceFiles);
 
         const loadedComponents = resolveInitialComponents(
-          saved,
+          {
+            ...saved,
+            importTemplateType: loadedTemplateType,
+            importDimensions: loadedImportDimensions,
+          },
           refFile,
           r.data,
           {
@@ -360,16 +683,116 @@ export default function BlueprintDesign() {
         setSelectedId(loadedComponents[0]?.id || null);
         setEdit3DId(null);
         setUnit(saved.unit || "mm");
-        setReferenceFile(refFile);
+        setReferenceFiles(loadedReferenceFiles);
+        setReferenceFile(
+          loadedReferenceFiles?.front ||
+            loadedReferenceFiles?.back ||
+            loadedReferenceFiles?.left ||
+            loadedReferenceFiles?.right ||
+            loadedReferenceFiles?.top ||
+            refFile ||
+            null,
+        );
         setEditorMode(resolvedMode);
+        setImportTemplateType(loadedTemplateType);
+        setImportDimensions(loadedImportDimensions);
+        setImportComments(saved.importComments || "");
+        const normalizedCalibrationByView = normalizeReferenceCalibrationByView(
+          saved.referenceCalibrationByView ||
+            saved.reference_calibration_by_view ||
+            saved.referenceCalibration,
+        );
+
+        const normalizedTraceObjectsByView = normalizeTraceObjectsByView(
+          saved.traceObjectsByView ||
+            saved.trace_objects_by_view ||
+            saved.traceObjects,
+        );
+
+        setReferenceCalibrationByView(normalizedCalibrationByView);
+        setTraceObjectsByView(normalizedTraceObjectsByView);
+        setSelectedTraceId(null);
+          
+        setAi3dState(normalizeAi3dState(saved.ai3d));
         setView(resolvedMode === "reference" ? "front" : "3d");
       })
       .catch(() => toast.error("Failed to load blueprint."));
   }, [id]);
+  
+  const selectedComp = components.find((c) => c.id === selectedId) || null; 
 
-  const selectedComp = components.find((c) => c.id === selectedId) || null;
+  const activeReferenceView = useMemo(() => {
+    return REFERENCE_TRACE_VIEWS.includes(view) ? view : "front";
+  }, [view]);
 
-   const selectedComponents = useMemo(() => {
+  const activeReferenceCalibration = useMemo(() => {
+    return (
+      referenceCalibrationByView?.[activeReferenceView] ||
+      normalizeReferenceCalibration()
+    );
+  }, [referenceCalibrationByView, activeReferenceView]);
+
+  const activeTraceObjects = useMemo(() => {
+    return Array.isArray(traceObjectsByView?.[activeReferenceView])
+      ? traceObjectsByView[activeReferenceView]
+      : [];
+  }, [traceObjectsByView, activeReferenceView]);
+
+  const allTraceObjects = useMemo(() => {
+    return flattenTraceObjectsByView(traceObjectsByView);
+  }, [traceObjectsByView]);
+
+  const setActiveReferenceCalibration = useCallback(
+    (nextValue) => {
+      setReferenceCalibrationByView((prev) => {
+        const current =
+          prev?.[activeReferenceView] || normalizeReferenceCalibration();
+
+        const resolved =
+          typeof nextValue === "function" ? nextValue(current) : nextValue;
+
+        return {
+          ...createEmptyReferenceCalibrationByView(),
+          ...prev,
+          [activeReferenceView]: normalizeReferenceCalibration(resolved),
+        };
+      });
+    },
+    [activeReferenceView],
+  );
+
+  const setActiveTraceObjects = useCallback(
+    (nextValue) => {
+      setTraceObjectsByView((prev) => {
+        const current = Array.isArray(prev?.[activeReferenceView])
+          ? prev[activeReferenceView]
+          : [];
+
+        const resolved =
+          typeof nextValue === "function" ? nextValue(current) : nextValue;
+
+        return {
+          ...createEmptyTraceObjectsByView(),
+          ...prev,
+          [activeReferenceView]: normalizeTraceObjects(
+            resolved,
+            activeReferenceView,
+          ),
+        };
+      });
+    },
+    [activeReferenceView],
+  );
+
+  useEffect(() => {
+    setSelectedTraceId(null);
+  }, [activeReferenceView]);
+
+  const hasAnyReferenceFile = useMemo(() => {
+    return Object.values(referenceFiles || {}).some((file) => file?.url);
+  }, [referenceFiles]);
+
+  const selectedComponents = useMemo(() => {
     const activeIds = Array.from(new Set((selectedIds || []).filter(Boolean)));
 
     if (activeIds.length) {
@@ -379,6 +802,16 @@ export default function BlueprintDesign() {
 
     return getSelectionGroup(components, selectedComp);
   }, [components, selectedComp, selectedIds]);
+
+
+  
+  
+  const hasRealComponents = useMemo(() => {
+    return Array.isArray(components)
+      ? components.some((c) => c.type !== "reference_proxy")
+      : false;
+  }, [components]);
+  const ai3dBusy = ["queued", "processing"].includes(ai3dState.status);
 
   const selectedBounds3D = useMemo(() => {
     return getComponentsBounds3D(selectedComponents);
@@ -417,6 +850,7 @@ export default function BlueprintDesign() {
     [lockedFields],
   );
 
+  
   // ── Copy / Paste ─────────────────────────────────────────────────────────
   const copySelectedObject = useCallback(() => {
     if (!selectedComp) {
@@ -851,32 +1285,589 @@ export default function BlueprintDesign() {
     setEditorMode("editable");
     setView("3d");
 
-    setComponents((prev) => {
-      const normalizedPrev = Array.isArray(prev)
-        ? prev.map(normalizeComponent)
-        : [];
-      const hasRealComponents =
-        normalizedPrev.length > 0 &&
-        normalizedPrev.some((c) => c.type !== "reference_proxy");
-
-      if (hasRealComponents) {
-        return normalizedPrev;
-      }
-
-      if (referenceFile?.url) {
-        return createImportedDiningChairComponents(
-          {},
-          referenceFile,
-          blueprint || {},
-          { w: WORLD_W, h: WORLD_H, d: WORLD_D },
-        );
-      }
-
-      return normalizedPrev;
-    });
+    // Editable mode should stay blank if wala pang real components.
+    // Huwag mag-auto create ng default imported furniture.
+    setComponents((prev) =>
+      Array.isArray(prev) ? prev.map(normalizeComponent) : [],
+    );
 
     toast.success("Editable mode enabled.");
-  }, [referenceFile, blueprint, WORLD_W, WORLD_H, WORLD_D]);
+  }, []);
+  
+  const updateReferenceDimension = useCallback((key, value) => {
+    const numeric = Number(value);
+
+    setImportDimensions((prev) => ({
+      ...prev,
+      [key]:
+        Number.isFinite(numeric) && numeric > 0
+          ? numeric
+          : prev[key],
+    }));
+  }, []);
+
+  const handleConvertReferenceToEditable = useCallback(() => {
+    const activeReference =
+    referenceFiles?.front ||
+    referenceFiles?.back ||
+    referenceFiles?.left ||
+    referenceFiles?.right ||
+    referenceFiles?.top ||
+    referenceFile;
+
+  if (!activeReference?.url) {
+    toast.error("Walang reference file na iko-convert.");
+    return;
+  }
+
+    if (!Array.isArray(allTraceObjects) || !allTraceObjects.length) {
+      toast.error("Mag-trace muna ng layout bago mag-convert.");
+      return;
+    }
+
+    if (
+      hasRealComponents &&
+      !window.confirm(
+        "May existing converted components na. Papalitan ito ng bagong converted cabinet layout. Itutuloy?",
+      )
+    ) {
+      return;
+    }
+
+    const normalizeProjectionView = (rawView = "front") => {
+      if (rawView === "back") return "front";
+      if (rawView === "right") return "left";
+      if (rawView === "top") return "top";
+      return "front";
+    };
+
+    const targetOverall = {
+      w: Math.max(200, snap(Number(importDimensions?.w || 2400))),
+      h: Math.max(200, snap(Number(importDimensions?.h || 2400))),
+      d: Math.max(100, snap(Number(importDimensions?.d || 600))),
+    };
+    
+    const treatAsChair = isLikelyChairReference({
+      importTemplateType,
+      importDimensions: targetOverall,
+      traceObjectsByView,
+    });
+
+    if (treatAsChair) {
+      const generated = createImportedDiningChairComponents(
+        {
+          importDimensions: targetOverall,
+        },
+        activeReference,
+        {
+          ...(blueprint || {}),
+          title: blueprint?.title || "Imported Chair",
+        },
+        {
+          w: WORLD_W,
+          h: WORLD_H,
+          d: WORLD_D,
+        },
+      );
+
+      if (!generated.length) {
+        toast.error("Walang na-generate na chair parts.");
+        return;
+      }
+
+      pushHistory(
+        Array.isArray(components)
+          ? components.map((c) => normalizeComponent(c))
+          : [],
+      );
+
+      setComponents(generated);
+      setSelectedId(generated[0]?.id || null);
+      setSelectedIds(generated.map((item) => item.id));
+      setEdit3DId(generated[0]?.id || null);
+      setEditorMode("editable");
+      setView("3d");
+      setTransformMode("translate");
+      setTraceTool("select");
+      setActiveChairBuild(
+        generated[0]?.groupId
+          ? {
+              id: generated[0].groupId,
+              label: generated[0].groupLabel || "Imported Chair",
+            }
+          : null,
+      );
+
+      toast.success(
+        `Converted reference into ${generated.length} editable chair parts.`,
+      );
+      return;
+    }
+        const cleaned = normalizeTraceObjects(allTraceObjects, "front")
+      .filter((obj) => Number(obj?.width) > 5 && Number(obj?.height) > 5)
+      .map((obj, index) => ({
+        ...obj,
+        traceIndex: index,
+        projectionView: normalizeProjectionView(
+          obj?.projectionView || obj?.traceView || obj?.view || "front",
+        ),
+      }));
+
+    if (!cleaned.length) {
+      toast.error("Walang valid traced rectangles.");
+      return;
+    }
+
+    const traceBuckets = cleaned.reduce(
+      (acc, obj) => {
+        acc[obj.projectionView] = acc[obj.projectionView] || [];
+        acc[obj.projectionView].push(obj);
+        return acc;
+      },
+      { front: [], left: [], top: [] },
+    );
+
+    const sortLeftToRight = (a, b) =>
+      Number(a.x) - Number(b.x) ||
+      Number(a.y) - Number(b.y) ||
+      Number(a.traceIndex) - Number(b.traceIndex);
+
+    const sortTopToBottom = (a, b) =>
+      Number(a.y) - Number(b.y) ||
+      Number(a.x) - Number(b.x) ||
+      Number(a.traceIndex) - Number(b.traceIndex);
+
+    const frontSections = [...(traceBuckets.front || [])].sort(sortLeftToRight);
+    const topSections = [...(traceBuckets.top || [])].sort(sortLeftToRight);
+    const leftSections = [...(traceBuckets.left || [])].sort(sortTopToBottom);
+
+    if (!frontSections.length) {
+      toast.error(
+        "Mag-trace ng cabinet sections sa Front o Back view bago mag-convert.",
+      );
+      return;
+    }
+
+    const getBounds = (items = []) => ({
+      minX: Math.min(...items.map((o) => o.x)),
+      minY: Math.min(...items.map((o) => o.y)),
+      maxX: Math.max(...items.map((o) => o.x + o.width)),
+      maxY: Math.max(...items.map((o) => o.y + o.height)),
+    });
+
+    const frontBounds = getBounds(frontSections);
+    const frontWidthPx = Math.max(1, frontBounds.maxX - frontBounds.minX);
+    const frontHeightPx = Math.max(1, frontBounds.maxY - frontBounds.minY);
+
+    const topBounds = topSections.length ? getBounds(topSections) : null;
+    const topDepthPx = topBounds
+      ? Math.max(1, topBounds.maxY - topBounds.minY)
+      : 1;
+
+    const leftBounds = leftSections.length ? getBounds(leftSections) : null;
+    const leftDepthPx = leftBounds
+      ? Math.max(1, leftBounds.maxX - leftBounds.minX)
+      : 1;
+
+    const originX = snap((WORLD_W - targetOverall.w) / 2);
+    const originZ = snap((WORLD_D - targetOverall.d) / 2);
+    const floorY = WORLD_H - FLOOR_OFFSET;
+
+    const baseMaterial = "Oak Wood";
+    const finishId = getDefaultFinishId(baseMaterial);
+    const finishData = applyWoodFinish(
+      { material: baseMaterial, fill: "#d9c2a5" },
+      finishId,
+    );
+
+    const conversionGroupId = makeGroupId();
+    const conversionGroupLabel = `${
+      blueprint?.title || "Reference Cabinet"
+    } Converted`;
+
+    const faceThickness = Math.max(
+      18,
+      snap(Math.min(40, targetOverall.d * 0.04)),
+    );
+    const insetGap = 20;
+    const faceGap = 12;
+
+    const inferSectionMeta = (obj, index, total) => {
+      const widthRatio = obj.width / frontWidthPx;
+      const centerRatio =
+        ((obj.x + obj.width / 2) - frontBounds.minX) / frontWidthPx;
+
+      if (total === 1) {
+        return {
+          kind: "main",
+          label: "Main Cabinet Body",
+        };
+      }
+
+      if (widthRatio <= 0.2) {
+        return {
+          kind: "drawer",
+          label:
+            centerRatio < 0.5 ? "Left Drawer Column" : "Right Drawer Column",
+        };
+      }
+
+      if (index === 0) {
+        return { kind: "section", label: "Left Cabinet Section" };
+      }
+
+      if (index === total - 1) {
+        return { kind: "section", label: "Right Cabinet Section" };
+      }
+
+      return {
+        kind: "section",
+        label: `Center Cabinet Section ${index}`,
+      };
+    };
+
+    const getDepthDataForSection = (index) => {
+      if (topSections.length === frontSections.length) {
+        const topObj = topSections[index];
+        const depthMm = Math.max(
+          80,
+          snap((topObj.height / topDepthPx) * targetOverall.d),
+        );
+        const zOffsetMm = snap(
+          ((topObj.y - topBounds.minY) / topDepthPx) * targetOverall.d,
+        );
+        return { depthMm, zOffsetMm };
+      }
+
+      if (topSections.length === 1) {
+        return { depthMm: targetOverall.d, zOffsetMm: 0 };
+      }
+
+      if (leftSections.length === frontSections.length) {
+        const sideObj = leftSections[index];
+        const depthMm = Math.max(
+          80,
+          snap((sideObj.width / leftDepthPx) * targetOverall.d),
+        );
+        return { depthMm, zOffsetMm: 0 };
+      }
+
+      if (leftSections.length === 1) {
+        return { depthMm: targetOverall.d, zOffsetMm: 0 };
+      }
+
+      return { depthMm: targetOverall.d, zOffsetMm: 0 };
+    };
+
+    const generated = [];
+
+    frontSections.forEach((obj, index) => {
+      const sectionNo = index + 1;
+      const meta = inferSectionMeta(obj, index, frontSections.length);
+
+      const widthMm = Math.max(
+        100,
+        snap((obj.width / frontWidthPx) * targetOverall.w),
+      );
+
+      const heightMm = Math.max(
+        120,
+        snap((obj.height / frontHeightPx) * targetOverall.h),
+      );
+
+      const leftOffsetMm = snap(
+        ((obj.x - frontBounds.minX) / frontWidthPx) * targetOverall.w,
+      );
+
+      const bottomGapMm = snap(
+        ((frontBounds.maxY - (obj.y + obj.height)) / frontHeightPx) *
+          targetOverall.h,
+      );
+
+      const { depthMm, zOffsetMm } = getDepthDataForSection(index);
+
+      const sectionX = originX + leftOffsetMm;
+      const sectionY = floorY - heightMm - bottomGapMm;
+      const sectionZ = originZ + zOffsetMm;
+
+      const bodyDepthMm = Math.max(80, snap(depthMm - faceThickness));
+
+      generated.push(
+        normalizeComponent({
+          id: makeId(),
+          groupId: conversionGroupId,
+          groupLabel: conversionGroupLabel,
+          groupType: "assembly",
+          partCode: `S${sectionNo}-BODY`,
+          type: "cabinet_section_body",
+          label: meta.label,
+          category: "Reference Cabinet",
+          blueprintStyle: "box",
+          x: sectionX,
+          y: sectionY,
+          z: sectionZ,
+          width: widthMm,
+          height: heightMm,
+          depth: bodyDepthMm,
+          fill: finishData.fill || "#d9c2a5",
+          material: finishData.material || baseMaterial,
+          finish: finishData.finish || "",
+          qty: 1,
+          locked: false,
+        }),
+      );
+
+      const usableWidth = Math.max(80, widthMm - insetGap * 2);
+      const usableHeight = Math.max(120, heightMm - insetGap * 2);
+      const faceX = sectionX + insetGap;
+      const faceY = sectionY + insetGap;
+      const faceZ = sectionZ + Math.max(0, depthMm - faceThickness);
+
+      if (meta.kind === "drawer") {
+        const drawerCount = Math.max(3, Math.min(4, Math.round(heightMm / 700)));
+        const innerGapTotal = faceGap * (drawerCount - 1);
+        const eachDrawerHeight = Math.max(
+          120,
+          snap((usableHeight - innerGapTotal) / drawerCount),
+        );
+
+        for (let drawerIndex = 0; drawerIndex < drawerCount; drawerIndex += 1) {
+          generated.push(
+            normalizeComponent({
+              id: makeId(),
+              groupId: conversionGroupId,
+              groupLabel: conversionGroupLabel,
+              groupType: "assembly",
+              partCode: `S${sectionNo}-DR${drawerIndex + 1}`,
+              type: "drawer_front_panel",
+              label: `${meta.label} Drawer ${drawerIndex + 1}`,
+              category: "Reference Cabinet",
+              blueprintStyle: "box",
+              x: faceX,
+              y: faceY + drawerIndex * (eachDrawerHeight + faceGap),
+              z: faceZ,
+              width: usableWidth,
+              height: eachDrawerHeight,
+              depth: faceThickness,
+              fill: finishData.fill || "#d9c2a5",
+              material: finishData.material || baseMaterial,
+              finish: finishData.finish || "",
+              qty: 1,
+              locked: false,
+            }),
+          );
+        }
+
+        return;
+      }
+
+      if (usableWidth >= 900) {
+        const splitGap = 14;
+        const doorWidth = Math.max(120, snap((usableWidth - splitGap) / 2));
+
+        generated.push(
+          normalizeComponent({
+            id: makeId(),
+            groupId: conversionGroupId,
+            groupLabel: conversionGroupLabel,
+            groupType: "assembly",
+            partCode: `S${sectionNo}-DL`,
+            type: "door_front_panel",
+            label: `${meta.label} Left Door`,
+            category: "Reference Cabinet",
+            blueprintStyle: "box",
+            x: faceX,
+            y: faceY,
+            z: faceZ,
+            width: doorWidth,
+            height: usableHeight,
+            depth: faceThickness,
+            fill: finishData.fill || "#d9c2a5",
+            material: finishData.material || baseMaterial,
+            finish: finishData.finish || "",
+            qty: 1,
+            locked: false,
+          }),
+        );
+
+        generated.push(
+          normalizeComponent({
+            id: makeId(),
+            groupId: conversionGroupId,
+            groupLabel: conversionGroupLabel,
+            groupType: "assembly",
+            partCode: `S${sectionNo}-DR`,
+            type: "door_front_panel",
+            label: `${meta.label} Right Door`,
+            category: "Reference Cabinet",
+            blueprintStyle: "box",
+            x: faceX + doorWidth + splitGap,
+            y: faceY,
+            z: faceZ,
+            width: doorWidth,
+            height: usableHeight,
+            depth: faceThickness,
+            fill: finishData.fill || "#d9c2a5",
+            material: finishData.material || baseMaterial,
+            finish: finishData.finish || "",
+            qty: 1,
+            locked: false,
+          }),
+        );
+
+        return;
+      }
+
+      generated.push(
+        normalizeComponent({
+          id: makeId(),
+          groupId: conversionGroupId,
+          groupLabel: conversionGroupLabel,
+          groupType: "assembly",
+          partCode: `S${sectionNo}-FACE`,
+          type: "door_front_panel",
+          label: `${meta.label} Front Panel`,
+          category: "Reference Cabinet",
+          blueprintStyle: "box",
+          x: faceX,
+          y: faceY,
+          z: faceZ,
+          width: usableWidth,
+          height: usableHeight,
+          depth: faceThickness,
+          fill: finishData.fill || "#d9c2a5",
+          material: finishData.material || baseMaterial,
+          finish: finishData.finish || "",
+          qty: 1,
+          locked: false,
+        }),
+      );
+    });
+
+    if (!generated.length) {
+      toast.error("Walang na-generate na cabinet parts.");
+      return;
+    }
+
+    pushHistory(
+      Array.isArray(components)
+        ? components.map((c) => normalizeComponent(c))
+        : [],
+    );
+
+    setComponents(generated);
+    setSelectedId(generated[0]?.id || null);
+    setSelectedIds(generated.map((item) => item.id));
+    setEdit3DId(generated[0]?.id || null);
+    setEditorMode("editable");
+    setView("3d");
+    setTransformMode("translate");
+    setTraceTool("select");
+
+    toast.success(
+      `Converted ${frontSections.length} traced section${
+        frontSections.length > 1 ? "s" : ""
+      } into ${generated.length} editable cabinet part${
+        generated.length > 1 ? "s" : ""
+      }.`,
+    );
+  }, [
+    referenceFile,
+    referenceFiles,
+    allTraceObjects,
+    importDimensions,
+    importTemplateType,
+    traceObjectsByView,
+    hasRealComponents,
+    components,
+    pushHistory,
+    blueprint,
+    WORLD_W,
+    WORLD_H,
+    WORLD_D,
+  ]);
+
+  const handleGenerateAi3DModel = useCallback(async () => {
+    const aiReference =
+      referenceFiles?.front ||
+      referenceFiles?.back ||
+      referenceFiles?.left ||
+      referenceFiles?.right ||
+      referenceFiles?.top ||
+      referenceFile;
+
+    if (!aiReference?.url) {
+      toast.error("Mag-import muna ng JPG o PNG reference.");
+      return;
+    }
+
+    try {
+      const { data } = await api.post(`/blueprints/${id}/ai3d/generate`);
+      const nextState = normalizeAi3dState(data?.ai3d);
+
+      setAi3dState(nextState);
+      setView("3d");
+      toast.success(data?.message || "AI 3D generation started.");
+    } catch (err) {
+      console.error("handleGenerateAi3DModel error:", err);
+      toast.error(
+        err?.response?.data?.message || "Failed to start AI 3D generation.",
+      );
+    }
+  }, [id, referenceFile, referenceFiles]);
+
+  const refreshAi3DStatus = useCallback(
+    async (silent = false) => {
+      if (!id || id === "new") return;
+
+      try {
+        const previousStatus = ai3dState.status;
+        const { data } = await api.get(`/blueprints/${id}/ai3d/status`);
+        const nextState = normalizeAi3dState(data?.ai3d);
+
+        setAi3dState(nextState);
+
+        if (!silent && nextState.status === "done" && previousStatus !== "done") {
+          toast.success("AI 3D model is ready.");
+        }
+      } catch (err) {
+        console.error("refreshAi3DStatus error:", err);
+        if (!silent) {
+          toast.error(
+            err?.response?.data?.message || "Failed to fetch AI 3D status.",
+          );
+        }
+      }
+    },
+    [id, ai3dState.status],
+  );
+
+  useEffect(() => {
+    if (!id || id === "new") return;
+    if (!["queued", "processing"].includes(ai3dState.status)) return;
+
+    const timer = window.setInterval(() => {
+      refreshAi3DStatus(true);
+    }, 8000);
+
+    return () => window.clearInterval(timer);
+  }, [id, ai3dState.status, refreshAi3DStatus]);
+
+  useEffect(() => {
+    const activeView = view === "3d" ? "front" : view;
+
+    const nextReference =
+      referenceFiles?.[activeView] ||
+      referenceFiles?.front ||
+      referenceFiles?.back ||
+      referenceFiles?.left ||
+      referenceFiles?.right ||
+      referenceFiles?.top ||
+      null;
+
+    setReferenceFile(nextReference);
+  }, [view, referenceFiles]);
+
 
   const addComponent = useCallback(
     (t) => {
@@ -1142,33 +2133,52 @@ export default function BlueprintDesign() {
 
   const saveDesign = async () => {
     if (!id || id === "new") {
-      toast.error(
-        "Create the blueprint record first before saving the design.",
-      );
+      toast.error("Create the blueprint record first before saving the design.");
       return;
     }
 
     setSaving(true);
+
     try {
+      const payload = {
+        unit,
+        editorMode,
+        components: Array.isArray(components)
+          ? components.map((c) => normalizeComponent(c))
+          : [],
+        reference_files: sanitizeReferenceFiles(referenceFiles),
+        reference_file: sanitizeReferenceFile(
+          referenceFiles?.front || referenceFile,
+        ),
+        importTemplateType,
+        importDimensions: sanitizeImportDimensions(importDimensions),
+        importComments,
+        ai3d: normalizeAi3dState(ai3dState),
+        worldSize: { w: WORLD_W, h: WORLD_H, d: WORLD_D },
+        sheetSize: { w: SHEET_W, h: SHEET_H },
+        exportViews: EXPORT_VIEWS,
+        referenceCalibrationByView: normalizeReferenceCalibrationByView(
+          referenceCalibrationByView,
+        ),
+        traceObjectsByView: normalizeTraceObjectsByView(traceObjectsByView),
+
+        // legacy fallback para hindi masira ang old saved data readers
+        referenceCalibration: normalizeReferenceCalibration(
+          referenceCalibrationByView?.front || activeReferenceCalibration,
+        ),
+        traceObjects: flattenTraceObjectsByView(traceObjectsByView),
+      };
+
       await api.put(`/blueprints/${id}`, {
-        design_data: JSON.stringify({
-          unit,
-          editorMode,
-          components,
-          reference_file: referenceFile,
-          importDimensions: {
-            w: 460,
-            h: 920,
-            d: 520,
-          },
-          worldSize: { w: WORLD_W, h: WORLD_H, d: WORLD_D },
-          sheetSize: { w: SHEET_W, h: SHEET_H },
-          exportViews: EXPORT_VIEWS,
-        }),
+        design_data: JSON.stringify(payload),
       });
+
       toast.success("Blueprint saved.");
-    } catch {
-      toast.error("Save failed. Check server connection.");
+    } catch (error) {
+      console.error("saveDesign error:", error);
+      toast.error(
+        error?.response?.data?.message || "Save failed. Check server connection.",
+      );
     } finally {
       setSaving(false);
     }
@@ -1209,17 +2219,23 @@ export default function BlueprintDesign() {
   }, [exportTargetBounds, unit]);
 
   const openReferenceFile = useCallback(() => {
-    if (!referenceFile?.url) {
+    const activeView = view === "3d" ? "front" : view;
+    const activeReference =
+      referenceFiles?.[activeView] ||
+      referenceFiles?.front ||
+      referenceFile;
+
+    if (!activeReference?.url) {
       toast.error("No reference file available.");
       return;
     }
 
     window.open(
-      resolveAssetUrl(referenceFile.url),
+      resolveAssetUrl(activeReference.url),
       "_blank",
       "noopener,noreferrer",
     );
-  }, [referenceFile]);
+  }, [view, referenceFiles, referenceFile]);
 
   const openExportSheets = useCallback(
     (autoPrint = false) => {
@@ -1319,6 +2335,25 @@ export default function BlueprintDesign() {
         {activeChairBuild?.label && (
           <span style={S.smallPill}>
             Active Chair Build: {activeChairBuild.label}
+          </span>
+        )} 
+        {referenceFile?.url && (
+          <span
+            style={{
+              fontSize: 11,
+              background: "#1f2937",
+              padding: "2px 10px",
+              borderRadius: 20,
+              color:
+                ai3dState.status === "done"
+                  ? "#86efac"
+                  : ai3dState.status === "error"
+                    ? "#fca5a5"
+                    : "#fcd34d",
+            }}
+          >
+            AI 3D: {AI3D_STATUS_LABELS[ai3dState.status] || "Idle"}
+            {ai3dBusy ? ` · ${ai3dState.progress || 0}%` : ""}
           </span>
         )}
 
@@ -1493,12 +2528,54 @@ export default function BlueprintDesign() {
             🗑 Delete
           </button>
 
-          {referenceFile && (
+          
+
+          {hasAnyReferenceFile && (
             <button
-              onClick={openReferenceFile}
+              onClick={handleConvertReferenceToEditable}
+              disabled={!allTraceObjects.length}
+              style={{
+                ...S.toolBtn,
+                background: "#b45309",
+                opacity: allTraceObjects.length ? 1 : 0.45,
+              }}
+            >
+              {hasRealComponents ? "♻ Re-convert Reference" : "🧩 Convert Reference"}
+            </button>
+          )}
+
+          {hasAnyReferenceFile && (
+            <button
+              onClick={handleGenerateAi3DModel}
+              disabled={ai3dBusy}
+              style={{
+                ...S.toolBtn,
+                background: "#7c3aed",
+                opacity: ai3dBusy ? 0.55 : 1,
+              }}
+            >
+              {ai3dBusy ? `⏳ Generating 3D... ${ai3dState.progress || 0}%` : "✨ Generate 3D Model"}
+            </button>
+          )}
+          
+
+          {referenceFile && ai3dState.taskId && (
+            <button
+              onClick={() => refreshAi3DStatus(false)}
               style={{ ...S.toolBtn, background: "#475569" }}
             >
-              📎 Open Reference
+              🔄 3D Status
+            </button>
+          )}
+
+          {ai3dState.modelUrl && (
+            <button
+              onClick={() =>
+                window.open(ai3dState.modelUrl, "_blank", "noopener,noreferrer")
+              }
+              style={{ ...S.toolBtn, background: "#0f766e" }}
+            >
+              🧊 Open GLB
             </button>
           )}
 
@@ -1660,11 +2737,35 @@ export default function BlueprintDesign() {
                   blueprintTitle={blueprint?.title || "Blueprint Design"}
                   unit={unit}
                   referenceFile={referenceFile}
+                  editorMode={editorMode}
+                  referenceCalibration={activeReferenceCalibration}
+                  setReferenceCalibration={setActiveReferenceCalibration}
+                  traceObjects={activeTraceObjects}
+                  setTraceObjects={setActiveTraceObjects}
+                  traceTool={traceTool}
+                  selectedTraceId={selectedTraceId}
+                  setSelectedTraceId={setSelectedTraceId}
+                  newTraceType={newTraceType}
                 />
               </div>
             </div>
           </div>
-
+          {traceTool === "rect" && (
+            <div style={{ marginTop: 10 }}>
+              <label style={S.propLabel}>Trace Type</label>
+              <select
+                value={newTraceType}
+                onChange={(e) => setNewTraceType(e.target.value)}
+                style={S.propInput}
+              >
+                {TRACE_TYPE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <div
             style={{
               width: 320,
@@ -2074,6 +3175,26 @@ export default function BlueprintDesign() {
               >
                 <div>Components: {components.length}</div>
                 <div>Materials: {uniqueMaterials.length}</div>
+                <div>Trace Objects (This View): {activeTraceObjects.length}</div>
+                <div>Trace Objects (All Views): {allTraceObjects.length}</div>
+                <div>
+                  Calibrated ({activeReferenceView.toUpperCase()}):{" "}
+                  {activeReferenceCalibration?.isCalibrated ? "Yes" : "No"}
+                </div>
+                <div>
+                  Pixels/MM ({activeReferenceView.toUpperCase()}):{" "}
+                  {Number(activeReferenceCalibration?.pixelsPerMm || 0).toFixed(4)}
+                </div>
+                <div>
+                  Real Distance MM ({activeReferenceView.toUpperCase()}):{" "}
+                  {Number(activeReferenceCalibration?.realDistanceMm || 0)}
+                </div>
+                <div>
+                  Points ({activeReferenceView.toUpperCase()}):{" "}
+                  {Array.isArray(activeReferenceCalibration?.points)
+                    ? activeReferenceCalibration.points.length
+                    : 0}
+                </div>
                 <div>
                   Total Estimate: ₱{" "}
                   {designTotal.toLocaleString("en-PH", {
@@ -2100,6 +3221,116 @@ export default function BlueprintDesign() {
                   </div>
                   {uniqueMaterials.map((m) => (
                     <div key={m}>• {m}</div>
+                  ))}
+                
+                </div>               
+              )}
+              {editorMode === "reference" && view !== "3d" && (
+                <div
+                  style={{
+                    marginTop: 14,
+                    paddingTop: 12,
+                    borderTop: "1px solid #334155",
+                  }}
+                >
+                  <p style={S.panelLabel}>Reference Conversion Setup</p>
+
+                  <div
+                    style={{
+                      background: "#0f172a",
+                      border: "1px solid #334155",
+                      borderRadius: 8,
+                      padding: 10,
+                      marginBottom: 10,
+                    }}
+                  >
+                    <div style={{ marginBottom: 8 }}>
+                      <label style={S.propLabel}>Overall Width (mm)</label>
+                      <input
+                        type="number"
+                        value={importDimensions.w}
+                        onChange={(e) => updateReferenceDimension("w", e.target.value)}
+                        style={S.propInput}
+                      />
+                    </div>
+
+                    <div style={{ marginBottom: 8 }}>
+                      <label style={S.propLabel}>Overall Height (mm)</label>
+                      <input
+                        type="number"
+                        value={importDimensions.h}
+                        onChange={(e) => updateReferenceDimension("h", e.target.value)}
+                        style={S.propInput}
+                      />
+                    </div>
+
+                    <div style={{ marginBottom: 8 }}>
+                      <label style={S.propLabel}>Overall Depth (mm)</label>
+                      <input
+                        type="number"
+                        value={importDimensions.d}
+                        onChange={(e) => updateReferenceDimension("d", e.target.value)}
+                        style={S.propInput}
+                      />
+                    </div>
+
+                    <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                      <button
+                        onClick={() =>
+                          setActiveReferenceCalibration({
+                            points: [],
+                            realDistanceMm: 0,
+                            pixelsPerMm: 0,
+                            isCalibrated: false,
+                          })
+                        }
+                        style={{ ...S.toolBtn, flex: 1, background: "#334155" }}
+                      >
+                        Clear Scale
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setActiveTraceObjects([]);
+                          setSelectedTraceId(null);
+                        }}
+                        style={{ ...S.toolBtn, flex: 1, background: "#7f1d1d" }}
+                      >
+                        Clear Traces
+                      </button>
+
+                      
+                    </div>
+                  </div>
+                </div>
+              )}
+              {editorMode === "reference" && view !== "3d" && (
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 3,
+                    background: "#0f172a",
+                    borderRadius: 8,
+                    padding: 3,
+                  }}
+                > 
+                  {[
+                    { key: "select", label: "Select" },
+                    { key: "calibrate", label: "Set Scale" },
+                    { key: "rect", label: "Trace Rect" },
+                  ].map((tool) => (
+                    <button
+                      key={tool.key}
+                      onClick={() => setTraceTool(tool.key)}
+                      style={{
+                        ...S.toolBtn,
+                        background: traceTool === tool.key ? "#f97316" : "transparent",
+                        fontWeight: traceTool === tool.key ? 700 : 400,
+                        padding: "4px 12px",
+                      }}
+                    >
+                      {tool.label}
+                    </button>
                   ))}
                 </div>
               )}
