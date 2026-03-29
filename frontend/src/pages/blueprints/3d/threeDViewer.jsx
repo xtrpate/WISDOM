@@ -428,6 +428,112 @@ function Floating3DInspector({
 
   const unitLabel = unit === "inch" ? "in" : "mm";
 
+  const isRoundedBox = selectedComp.type === "rounded_box";
+  const boxWallMax = Math.max(
+    20,
+    Math.floor(Math.min(selectedComp.width, selectedComp.depth) / 2) - 10,
+  );
+  const boxBottomMax = Math.max(20, Math.floor(selectedComp.height) - 20);
+
+  const faceLabels = {
+    top: "Top",
+    bottom: "Bottom",
+    front: "Front",
+    back: "Back",
+    left: "Left",
+    right: "Right",
+  };
+
+  const selectedFace = isRoundedBox
+    ? selectedComp.selectedFace || "top"
+    : "top";
+
+  const selectedFaceCap =
+    `${selectedFace.charAt(0).toUpperCase()}${selectedFace.slice(1)}`;
+
+  const selectedFaceField = `faceOpen${selectedFaceCap}`;
+  const selectedFaceInsetField = `faceInset${selectedFaceCap}`;
+  const selectedFaceExtrudeField = `faceExtrude${selectedFaceCap}`;
+
+  const selectedFaceIsOpen = !!selectedComp[selectedFaceField];
+  const selectedFaceInset = Number(selectedComp[selectedFaceInsetField]) || 0;
+  const selectedFaceExtrude = Number(selectedComp[selectedFaceExtrudeField]) || 0;
+
+  const selectedFaceInsetMax =
+    selectedFace === "top" || selectedFace === "bottom"
+      ? Math.max(
+          0,
+          Math.floor(Math.min(selectedComp.width, selectedComp.depth) / 2) - 20,
+        )
+      : selectedFace === "front" || selectedFace === "back"
+        ? Math.max(
+            0,
+            Math.floor(Math.min(selectedComp.width, selectedComp.height) / 2) - 20,
+          )
+        : Math.max(
+            0,
+            Math.floor(Math.min(selectedComp.depth, selectedComp.height) / 2) - 20,
+          );
+
+  const selectedFaceExtrudeMax =
+    selectedFace === "top" || selectedFace === "bottom"
+      ? Math.max(0, Math.floor(selectedComp.height) - 20)
+      : selectedFace === "front" || selectedFace === "back"
+        ? Math.max(0, Math.floor(selectedComp.depth) - 20)
+        : Math.max(0, Math.floor(selectedComp.width) - 20);
+
+  const roundedBoxHasAnyOpenFace = [
+    selectedComp.faceOpenTop,
+    selectedComp.faceOpenBottom,
+    selectedComp.faceOpenFront,
+    selectedComp.faceOpenBack,
+    selectedComp.faceOpenLeft,
+    selectedComp.faceOpenRight,
+  ].some(Boolean);
+
+  const roundedBoxHasAnyFaceEdit = [
+    selectedComp.faceInsetTop,
+    selectedComp.faceInsetBottom,
+    selectedComp.faceInsetFront,
+    selectedComp.faceInsetBack,
+    selectedComp.faceInsetLeft,
+    selectedComp.faceInsetRight,
+    selectedComp.faceExtrudeTop,
+    selectedComp.faceExtrudeBottom,
+    selectedComp.faceExtrudeFront,
+    selectedComp.faceExtrudeBack,
+    selectedComp.faceExtrudeLeft,
+    selectedComp.faceExtrudeRight,
+  ].some((value) => Number(value) > 0);
+
+  const applyRoundedBoxSingleChange = (attrs) => {
+    onChange(selectedComp.id, attrs);
+  };
+
+  const clearAllRoundedBoxFaces = {
+    faceOpenTop: false,
+    faceOpenBottom: false,
+    faceOpenFront: false,
+    faceOpenBack: false,
+    faceOpenLeft: false,
+    faceOpenRight: false,
+  };
+
+  const clearAllRoundedBoxFaceEdits = {
+    faceInsetTop: 0,
+    faceInsetBottom: 0,
+    faceInsetFront: 0,
+    faceInsetBack: 0,
+    faceInsetLeft: 0,
+    faceInsetRight: 0,
+    faceExtrudeTop: 0,
+    faceExtrudeBottom: 0,
+    faceExtrudeFront: 0,
+    faceExtrudeBack: 0,
+    faceExtrudeLeft: 0,
+    faceExtrudeRight: 0,
+  };
+
   return (
     <div style={S.floatingPanelRight}>
       <div style={S.floatingTitle}>Selected Object</div>
@@ -517,7 +623,323 @@ function Floating3DInspector({
           style={S.floatingInput}
         />
       </div>
+      
+      {isRoundedBox && (
+        <>
+          <div style={S.infoCard}>
+            <div>
+              <b>Box Face Edit</b>
+            </div>
+            <div>Click a visible face in 3D, or use the face buttons below.</div>
+            <div>Shortcuts: G Move · R Rotate · T Scale</div>
+            <div>1-6 Select Face · O Open/Close Face · H Toggle Shell</div>
+            <div>J/K Inset · N/M Extrude · [ / ] Wall</div>
+            <div>Shift + [ / ] Bottom · Alt + [ / ] Radius</div>
+          </div>
 
+          <div style={{ marginBottom: 8 }}>
+            <label
+              style={{
+                ...S.floatingLabel,
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                cursor:
+                  editorMode === "editable" && !isLocked(selectedComp)
+                    ? "pointer"
+                    : "not-allowed",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={
+                  !!selectedComp.isHollow ||
+                  roundedBoxHasAnyOpenFace ||
+                  roundedBoxHasAnyFaceEdit
+                }
+                disabled={editorMode !== "editable" || isLocked(selectedComp)}
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    applyRoundedBoxSingleChange({
+                      isHollow: true,
+                    });
+                  } else {
+                    applyRoundedBoxSingleChange({
+                      isHollow: false,
+                      ...clearAllRoundedBoxFaces,
+                      ...clearAllRoundedBoxFaceEdits,
+                    });
+                  }
+                }}
+              />
+              Hollow / Shell
+            </label>
+          </div>
+
+          <div style={{ marginBottom: 8 }}>
+            <label style={S.floatingLabel}>Selected Face</label>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                gap: 6,
+                marginBottom: 8,
+              }}
+            >
+              {["top", "front", "right", "back", "left", "bottom"].map((faceKey) => {
+                const isActive = selectedFace === faceKey;
+
+                return (
+                  <button
+                    key={faceKey}
+                    type="button"
+                    disabled={editorMode !== "editable" || isLocked(selectedComp)}
+                    onClick={() =>
+                      applyRoundedBoxSingleChange({
+                        selectedFace: faceKey,
+                      })
+                    }
+                    style={{
+                      ...S.libraryTabBtn,
+                      ...(isActive ? S.libraryTabBtnActive : {}),
+                      opacity:
+                        editorMode !== "editable" || isLocked(selectedComp)
+                          ? 0.55
+                          : 1,
+                    }}
+                  >
+                    {faceLabels[faceKey]}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div style={S.infoCard}>
+              <div>
+                <b>{faceLabels[selectedFace]}</b>
+              </div>
+              <div>Status: {selectedFaceIsOpen ? "Open" : "Closed"}</div>
+              <div>Inset: {selectedFaceInset}mm</div>
+              <div>Extrude: {selectedFaceExtrude}mm</div>
+            </div>
+          </div>
+
+          <div style={{ marginBottom: 8 }}>
+            <label
+              style={{
+                ...S.floatingLabel,
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                cursor:
+                  editorMode === "editable" && !isLocked(selectedComp)
+                    ? "pointer"
+                    : "not-allowed",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={selectedFaceIsOpen}
+                disabled={editorMode !== "editable" || isLocked(selectedComp)}
+                onChange={(e) =>
+                  applyRoundedBoxSingleChange({
+                    isHollow: true,
+                    [selectedFaceField]: e.target.checked,
+                  })
+                }
+              />
+              Open Selected Face
+            </label>
+          </div>
+
+          <div style={{ marginBottom: 6 }}>
+            <label style={S.floatingLabel}>
+              Inset Selected Face (mm) — current: {selectedFaceInset}mm
+            </label>
+            <input
+              type="range"
+              min="0"
+              max={selectedFaceInsetMax}
+              step="5"
+              value={selectedFaceInset}
+              disabled={editorMode !== "editable" || isLocked(selectedComp)}
+              onChange={(e) =>
+                applyRoundedBoxSingleChange({
+                  isHollow: true,
+                  [selectedFaceInsetField]: Math.max(
+                    0,
+                    Math.min(selectedFaceInsetMax, Number(e.target.value) || 0),
+                  ),
+                })
+              }
+              style={{ width: "100%", accentColor: "#a78bfa" }}
+            />
+            <input
+              type="number"
+              min="0"
+              max={selectedFaceInsetMax}
+              step="5"
+              value={selectedFaceInset}
+              disabled={editorMode !== "editable" || isLocked(selectedComp)}
+              onChange={(e) =>
+                applyRoundedBoxSingleChange({
+                  isHollow: true,
+                  [selectedFaceInsetField]: Math.max(
+                    0,
+                    Math.min(selectedFaceInsetMax, Number(e.target.value) || 0),
+                  ),
+                })
+              }
+              style={S.floatingInput}
+            />
+          </div>
+
+          <div style={{ marginBottom: 6 }}>
+            <label style={S.floatingLabel}>
+              Extrude Selected Face Inward (mm) — current: {selectedFaceExtrude}mm
+            </label>
+            <input
+              type="range"
+              min="0"
+              max={selectedFaceExtrudeMax}
+              step="5"
+              value={selectedFaceExtrude}
+              disabled={editorMode !== "editable" || isLocked(selectedComp)}
+              onChange={(e) =>
+                applyRoundedBoxSingleChange({
+                  isHollow: true,
+                  [selectedFaceExtrudeField]: Math.max(
+                    0,
+                    Math.min(selectedFaceExtrudeMax, Number(e.target.value) || 0),
+                  ),
+                })
+              }
+              style={{ width: "100%", accentColor: "#f59e0b" }}
+            />
+            <input
+              type="number"
+              min="0"
+              max={selectedFaceExtrudeMax}
+              step="5"
+              value={selectedFaceExtrude}
+              disabled={editorMode !== "editable" || isLocked(selectedComp)}
+              onChange={(e) =>
+                applyRoundedBoxSingleChange({
+                  isHollow: true,
+                  [selectedFaceExtrudeField]: Math.max(
+                    0,
+                    Math.min(selectedFaceExtrudeMax, Number(e.target.value) || 0),
+                  ),
+                })
+              }
+              style={S.floatingInput}
+            />
+          </div>
+
+          <div style={{ marginBottom: 8 }}>
+            <button
+              type="button"
+              disabled={editorMode !== "editable" || isLocked(selectedComp)}
+              onClick={() =>
+                applyRoundedBoxSingleChange({
+                  [selectedFaceInsetField]: 0,
+                  [selectedFaceExtrudeField]: 0,
+                  [selectedFaceField]: false,
+                })
+              }
+              style={{
+                ...S.libraryTabBtn,
+                width: "100%",
+                opacity:
+                  editorMode !== "editable" || isLocked(selectedComp) ? 0.55 : 1,
+              }}
+            >
+              Reset Selected Face
+            </button>
+          </div>
+
+          <div style={{ marginBottom: 6 }}>
+            <label style={S.floatingLabel}>
+              Wall Thickness (mm) — current: {selectedComp.wallThickness ?? 20}mm
+            </label>
+            <input
+              type="range"
+              min="10"
+              max={boxWallMax}
+              step="5"
+              value={selectedComp.wallThickness ?? 20}
+              disabled={editorMode !== "editable" || isLocked(selectedComp)}
+              onChange={(e) =>
+                applyRoundedBoxSingleChange({
+                  wallThickness: Math.max(
+                    10,
+                    Math.min(boxWallMax, Number(e.target.value) || 20),
+                  ),
+                })
+              }
+              style={{ width: "100%", accentColor: "#38bdf8" }}
+            />
+            <input
+              type="number"
+              min="10"
+              max={boxWallMax}
+              step="5"
+              value={selectedComp.wallThickness ?? 20}
+              disabled={editorMode !== "editable" || isLocked(selectedComp)}
+              onChange={(e) =>
+                applyRoundedBoxSingleChange({
+                  wallThickness: Math.max(
+                    10,
+                    Math.min(boxWallMax, Number(e.target.value) || 20),
+                  ),
+                })
+              }
+              style={S.floatingInput}
+            />
+          </div>
+
+          <div style={{ marginBottom: 6 }}>
+            <label style={S.floatingLabel}>
+              Bottom Thickness (mm) — current: {selectedComp.bottomThickness ?? 20}mm
+            </label>
+            <input
+              type="range"
+              min="10"
+              max={boxBottomMax}
+              step="5"
+              value={selectedComp.bottomThickness ?? 20}
+              disabled={editorMode !== "editable" || isLocked(selectedComp)}
+              onChange={(e) =>
+                applyRoundedBoxSingleChange({
+                  bottomThickness: Math.max(
+                    10,
+                    Math.min(boxBottomMax, Number(e.target.value) || 20),
+                  ),
+                })
+              }
+              style={{ width: "100%", accentColor: "#22c55e" }}
+            />
+            <input
+              type="number"
+              min="10"
+              max={boxBottomMax}
+              step="5"
+              value={selectedComp.bottomThickness ?? 20}
+              disabled={editorMode !== "editable" || isLocked(selectedComp)}
+              onChange={(e) =>
+                applyRoundedBoxSingleChange({
+                  bottomThickness: Math.max(
+                    10,
+                    Math.min(boxBottomMax, Number(e.target.value) || 20),
+                  ),
+                })
+              }
+              style={S.floatingInput}
+            />
+          </div>
+        </>
+      )}
       {/* Top Width Ratio — trapezoid only */}
       {selectedComp.type === "shape_trapezoid" && (
         <div style={{ marginBottom: 6 }}>
@@ -861,6 +1283,243 @@ function ThreeDViewer({
   const handleKeyDown = useCallback(
     (e) => {
       if (isTypingElement(document.activeElement)) return;
+
+      const currentId = selectedIdRef.current;
+      const currentComp = currentId
+        ? (componentsRef.current || []).find((item) => item.id === currentId)
+        : null;
+
+      const hasEditableSelection =
+        editorMode === "editable" && !!currentId && !!currentComp;
+
+      if (hasEditableSelection && !e.ctrlKey && !e.metaKey) {
+        const key = String(e.key || "").toLowerCase();
+
+        if (key === "g") {
+          e.preventDefault();
+          setTransformMode("translate");
+          return;
+        }
+
+        if (key === "r") {
+          e.preventDefault();
+          setTransformMode("rotate");
+          return;
+        }
+
+        // T instead of S, dahil ginagamit na ang S sa WASD camera movement
+        if (key === "t") {
+          e.preventDefault();
+          setTransformMode("scale");
+          return;
+        }
+
+        if (currentComp.type === "rounded_box") {
+          const applyBoxUpdate = (attrs) => {
+            if (!attrs) return;
+            onUpdateCompRef.current?.(currentId, attrs);
+          };
+
+          const selectedFace = currentComp.selectedFace || "top";
+          const selectedFaceCap =
+            `${selectedFace.charAt(0).toUpperCase()}${selectedFace.slice(1)}`;
+
+          const selectedFaceField = `faceOpen${selectedFaceCap}`;
+          const selectedFaceInsetField = `faceInset${selectedFaceCap}`;
+          const selectedFaceExtrudeField = `faceExtrude${selectedFaceCap}`;
+
+          const hasAnyOpenFace = [
+            currentComp.faceOpenTop,
+            currentComp.faceOpenBottom,
+            currentComp.faceOpenFront,
+            currentComp.faceOpenBack,
+            currentComp.faceOpenLeft,
+            currentComp.faceOpenRight,
+          ].some(Boolean);
+
+          const hasAnyFaceEdit = [
+            currentComp.faceInsetTop,
+            currentComp.faceInsetBottom,
+            currentComp.faceInsetFront,
+            currentComp.faceInsetBack,
+            currentComp.faceInsetLeft,
+            currentComp.faceInsetRight,
+            currentComp.faceExtrudeTop,
+            currentComp.faceExtrudeBottom,
+            currentComp.faceExtrudeFront,
+            currentComp.faceExtrudeBack,
+            currentComp.faceExtrudeLeft,
+            currentComp.faceExtrudeRight,
+          ].some((value) => Number(value) > 0);
+
+          const clearAllRoundedBoxFaces = {
+            faceOpenTop: false,
+            faceOpenBottom: false,
+            faceOpenFront: false,
+            faceOpenBack: false,
+            faceOpenLeft: false,
+            faceOpenRight: false,
+          };
+
+          const clearAllRoundedBoxFaceEdits = {
+            faceInsetTop: 0,
+            faceInsetBottom: 0,
+            faceInsetFront: 0,
+            faceInsetBack: 0,
+            faceInsetLeft: 0,
+            faceInsetRight: 0,
+            faceExtrudeTop: 0,
+            faceExtrudeBottom: 0,
+            faceExtrudeFront: 0,
+            faceExtrudeBack: 0,
+            faceExtrudeLeft: 0,
+            faceExtrudeRight: 0,
+          };
+
+          const faceNumberMap = {
+            "1": "top",
+            "2": "front",
+            "3": "right",
+            "4": "back",
+            "5": "left",
+            "6": "bottom",
+          };
+
+          if (faceNumberMap[e.key]) {
+            e.preventDefault();
+            applyBoxUpdate({
+              selectedFace: faceNumberMap[e.key],
+            });
+            return;
+          }
+
+          if (key === "h") {
+            e.preventDefault();
+
+            if (currentComp.isHollow || hasAnyOpenFace || hasAnyFaceEdit) {
+              applyBoxUpdate({
+                isHollow: false,
+                ...clearAllRoundedBoxFaces,
+                ...clearAllRoundedBoxFaceEdits,
+              });
+            } else {
+              applyBoxUpdate({
+                isHollow: true,
+              });
+            }
+            return;
+          }
+
+          if (key === "o") {
+            e.preventDefault();
+            applyBoxUpdate({
+              isHollow: true,
+              [selectedFaceField]: !currentComp[selectedFaceField],
+            });
+            return;
+          }
+
+          if (key === "j" || key === "k") {
+            e.preventDefault();
+
+            const direction = key === "k" ? 1 : -1;
+            const currentInset = Number(currentComp[selectedFaceInsetField]) || 0;
+
+            const maxInset =
+              selectedFace === "top" || selectedFace === "bottom"
+                ? Math.max(
+                    0,
+                    Math.floor(Math.min(currentComp.width, currentComp.depth) / 2) - 20,
+                  )
+                : selectedFace === "front" || selectedFace === "back"
+                  ? Math.max(
+                      0,
+                      Math.floor(Math.min(currentComp.width, currentComp.height) / 2) - 20,
+                    )
+                  : Math.max(
+                      0,
+                      Math.floor(Math.min(currentComp.depth, currentComp.height) / 2) - 20,
+                    );
+
+            applyBoxUpdate({
+              isHollow: true,
+              [selectedFaceInsetField]: Math.max(
+                0,
+                Math.min(maxInset, currentInset + direction * 5),
+              ),
+            });
+            return;
+          }
+
+          if (key === "n" || key === "m") {
+            e.preventDefault();
+
+            const direction = key === "m" ? 1 : -1;
+            const currentExtrude = Number(currentComp[selectedFaceExtrudeField]) || 0;
+
+            const maxExtrude =
+              selectedFace === "top" || selectedFace === "bottom"
+                ? Math.max(0, Math.floor(currentComp.height) - 20)
+                : selectedFace === "front" || selectedFace === "back"
+                  ? Math.max(0, Math.floor(currentComp.depth) - 20)
+                  : Math.max(0, Math.floor(currentComp.width) - 20);
+
+            applyBoxUpdate({
+              isHollow: true,
+              [selectedFaceExtrudeField]: Math.max(
+                0,
+                Math.min(maxExtrude, currentExtrude + direction * 5),
+              ),
+            });
+            return;
+          }
+
+          if (e.key === "[" || e.key === "]") {
+            e.preventDefault();
+
+            const direction = e.key === "]" ? 1 : -1;
+            const currentRadius = Number(currentComp.cornerRadius) || 0;
+            const currentWall = Number(currentComp.wallThickness) || 20;
+            const currentBottom = Number(currentComp.bottomThickness) || 20;
+
+            const maxWall = Math.max(
+              20,
+              Math.floor(Math.min(currentComp.width, currentComp.depth) / 2) - 10,
+            );
+
+            const maxBottom = Math.max(20, Math.floor(currentComp.height) - 20);
+
+            if (e.altKey) {
+              applyBoxUpdate({
+                cornerRadius: Math.max(
+                  0,
+                  Math.min(500, currentRadius + direction * 5),
+                ),
+              });
+              return;
+            }
+
+            if (e.shiftKey) {
+              applyBoxUpdate({
+                bottomThickness: Math.max(
+                  10,
+                  Math.min(maxBottom, currentBottom + direction * 5),
+                ),
+              });
+              return;
+            }
+
+            applyBoxUpdate({
+              wallThickness: Math.max(
+                10,
+                Math.min(maxWall, currentWall + direction * 5),
+              ),
+            });
+            return;
+          }
+        }
+      }
+
       if (!moveEnabledRef.current) return;
 
       keysRef.current[e.code] = true;
@@ -880,7 +1539,7 @@ function ThreeDViewer({
         e.preventDefault();
       }
     },
-    [isTypingElement],
+    [isTypingElement, editorMode, setTransformMode],
   );
 
   const handleKeyUp = useCallback((e) => {
@@ -1883,6 +2542,7 @@ function ThreeDViewer({
       }
 
       const hitId = hit.object.userData.rootId;
+      const hitFaceKey = hit.object.userData.faceKey || null;
       const entry = entryMapRef.current.get(hitId);
 
       // CHANGED: Allow selection of locked objects so the user can unlock them.
@@ -1905,6 +2565,12 @@ function ThreeDViewer({
           applySelectionState(newArr, newPrimary);
         } else {
           applySelectionState([hitId], hitId);
+        }
+
+        if (hitFaceKey && entry.comp?.type === "rounded_box") {
+          onUpdateCompRef.current?.(hitId, {
+            selectedFace: hitFaceKey,
+          });
         }
 
         attachSelectedRaw();

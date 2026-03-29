@@ -698,6 +698,33 @@ function createFurnitureObject(comp, selected, editing, selectableMeshes) {
 
   if (comp.type === "rounded_box") {
     const boxR = Number(comp.cornerRadius) || 20;
+
+    const hasFaceOpenings = [
+      comp.faceOpenTop,
+      comp.faceOpenBottom,
+      comp.faceOpenFront,
+      comp.faceOpenBack,
+      comp.faceOpenLeft,
+      comp.faceOpenRight,
+    ].some(Boolean);
+
+    const hasFaceEdits = [
+      comp.faceInsetTop,
+      comp.faceInsetBottom,
+      comp.faceInsetFront,
+      comp.faceInsetBack,
+      comp.faceInsetLeft,
+      comp.faceInsetRight,
+      comp.faceExtrudeTop,
+      comp.faceExtrudeBottom,
+      comp.faceExtrudeFront,
+      comp.faceExtrudeBack,
+      comp.faceExtrudeLeft,
+      comp.faceExtrudeRight,
+    ].some((value) => Number(value) > 0);
+
+    const renderAsShell = !!comp.isHollow || hasFaceOpenings || hasFaceEdits;
+
     const body = addRoundedBox(
       root,
       selectableMeshes,
@@ -707,10 +734,39 @@ function createFurnitureObject(comp, selected, editing, selectableMeshes) {
       boxR,
       frontMat,
       comp.id,
-      true,
-      r,
+      {
+        isHollow: renderAsShell,
+        wallThickness: comp.wallThickness,
+        bottomThickness: comp.bottomThickness,
+        selectedFace: comp.selectedFace,
+
+        faceOpenTop: comp.faceOpenTop,
+        faceOpenBottom: comp.faceOpenBottom,
+        faceOpenFront: comp.faceOpenFront,
+        faceOpenBack: comp.faceOpenBack,
+        faceOpenLeft: comp.faceOpenLeft,
+        faceOpenRight: comp.faceOpenRight,
+
+        faceInsetTop: comp.faceInsetTop,
+        faceInsetBottom: comp.faceInsetBottom,
+        faceInsetFront: comp.faceInsetFront,
+        faceInsetBack: comp.faceInsetBack,
+        faceInsetLeft: comp.faceInsetLeft,
+        faceInsetRight: comp.faceInsetRight,
+
+        faceExtrudeTop: comp.faceExtrudeTop,
+        faceExtrudeBottom: comp.faceExtrudeBottom,
+        faceExtrudeFront: comp.faceExtrudeFront,
+        faceExtrudeBack: comp.faceExtrudeBack,
+        faceExtrudeLeft: comp.faceExtrudeLeft,
+        faceExtrudeRight: comp.faceExtrudeRight,
+      },
     );
-    addEdgeHighlight(root, body, palette.edge, 0.09);
+
+    if (!renderAsShell && body?.isMesh) {
+      addEdgeHighlight(root, body, palette.edge, 0.09);
+    }
+
     return root;
   }
 

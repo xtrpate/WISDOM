@@ -1,5 +1,11 @@
 // data/componentUtils.js — Component utility and normalization functions
-import { normalizeCornerRadius } from "../shapes/roundedBox";
+import {
+  normalizeCornerRadius,
+  normalizeBoxThickness,
+  normalizeBoxFaceKey,
+  normalizeBoxInset,
+  normalizeBoxFaceExtrude,
+} from "../shapes/roundedBox";
 import {
   WOOD_FINISH_MAP,
   WOOD_FINISHES,
@@ -100,6 +106,72 @@ function normalizeComponent(c) {
     qty: Math.max(1, Number(c.qty) || 1),
     locked: !!c.locked,
     cornerRadius: normalizeCornerRadius(c.cornerRadius),
+    isHollow: !!c.isHollow,
+    wallThickness: normalizeBoxThickness(c.wallThickness, 20),
+    bottomThickness: normalizeBoxThickness(
+      c.bottomThickness,
+      c.wallThickness ?? 20,
+    ),
+    selectedFace: normalizeBoxFaceKey(c.selectedFace),
+
+    faceOpenTop:
+      c.faceOpenTop !== undefined ? !!c.faceOpenTop : !!c.openTop,
+    faceOpenBottom: !!c.faceOpenBottom,
+    faceOpenFront: !!c.faceOpenFront,
+    faceOpenBack: !!c.faceOpenBack,
+    faceOpenLeft: !!c.faceOpenLeft,
+    faceOpenRight: !!c.faceOpenRight,
+
+    faceInsetTop: normalizeBoxInset(
+      c.faceInsetTop,
+      Math.max(0, Math.floor(Math.min(Number(c.width) || 120, Number(c.depth) || 60) / 2) - 20),
+    ),
+    faceInsetBottom: normalizeBoxInset(
+      c.faceInsetBottom,
+      Math.max(0, Math.floor(Math.min(Number(c.width) || 120, Number(c.depth) || 60) / 2) - 20),
+    ),
+    faceInsetFront: normalizeBoxInset(
+      c.faceInsetFront,
+      Math.max(0, Math.floor(Math.min(Number(c.width) || 120, Number(c.height) || 80) / 2) - 20),
+    ),
+    faceInsetBack: normalizeBoxInset(
+      c.faceInsetBack,
+      Math.max(0, Math.floor(Math.min(Number(c.width) || 120, Number(c.height) || 80) / 2) - 20),
+    ),
+    faceInsetLeft: normalizeBoxInset(
+      c.faceInsetLeft,
+      Math.max(0, Math.floor(Math.min(Number(c.depth) || 60, Number(c.height) || 80) / 2) - 20),
+    ),
+    faceInsetRight: normalizeBoxInset(
+      c.faceInsetRight,
+      Math.max(0, Math.floor(Math.min(Number(c.depth) || 60, Number(c.height) || 80) / 2) - 20),
+    ),
+
+    faceExtrudeTop: normalizeBoxFaceExtrude(
+      c.faceExtrudeTop,
+      Math.max(0, (Number(c.height) || 80) - 20),
+    ),
+    faceExtrudeBottom: normalizeBoxFaceExtrude(
+      c.faceExtrudeBottom,
+      Math.max(0, (Number(c.height) || 80) - 20),
+    ),
+    faceExtrudeFront: normalizeBoxFaceExtrude(
+      c.faceExtrudeFront,
+      Math.max(0, (Number(c.depth) || 60) - 20),
+    ),
+    faceExtrudeBack: normalizeBoxFaceExtrude(
+      c.faceExtrudeBack,
+      Math.max(0, (Number(c.depth) || 60) - 20),
+    ),
+    faceExtrudeLeft: normalizeBoxFaceExtrude(
+      c.faceExtrudeLeft,
+      Math.max(0, (Number(c.width) || 120) - 20),
+    ),
+    faceExtrudeRight: normalizeBoxFaceExtrude(
+      c.faceExtrudeRight,
+      Math.max(0, (Number(c.width) || 120) - 20),
+    ),
+
     topRatio: Math.max(0.05, Math.min(0.98, Number(c.topRatio) || 0.5)),
   };
 }
