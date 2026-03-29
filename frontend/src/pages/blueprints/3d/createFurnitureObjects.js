@@ -113,7 +113,9 @@ function buildWardrobePart3D(root, selectableMeshes, comp, palette, r = 0) {
     clearcoat: 0.48,
     clearcoatRoughness: 0.12,
   });
+  const FACE_GAP = 0.8;
 
+  
   if (comp.type === "wr_rod") {
     const radius = Math.max(4, Math.min(h, d) * 0.28);
 
@@ -209,7 +211,7 @@ function buildWardrobePart3D(root, selectableMeshes, comp, palette, r = 0) {
     comp.type === "wr_divider" ||
     comp.type === "wr_support_panel"
   ) {
-    const body = addBoxPart(
+    addBoxPart(
       root,
       selectableMeshes,
       [w, h, d],
@@ -220,18 +222,6 @@ function buildWardrobePart3D(root, selectableMeshes, comp, palette, r = 0) {
       Math.min(r, 3),
     );
 
-    addBoxPart(
-      root,
-      selectableMeshes,
-      [w, h, 8],
-      [0, 0, d / 2 - 4],
-      edgeMat,
-      comp.id,
-      false,
-      2,
-    );
-
-    addEdgeHighlight(root, body, toneColor(base, 0.26).getHex(), 0.08);
     return true;
   }
 
@@ -251,15 +241,15 @@ function buildWardrobePart3D(root, selectableMeshes, comp, palette, r = 0) {
     return true;
   }
 
-    if (
+  if (
     comp.type === "wr_top_panel" ||
     comp.type === "wr_bottom_panel" ||
     comp.type === "wr_top_shelf" ||
     comp.type === "wr_shelf" ||
     comp.type === "wr_base_top" ||
     comp.type === "wr_table"
-    ) {
-    const body = addBoxPart(
+  ) {
+    addBoxPart(
       root,
       selectableMeshes,
       [w, h, d],
@@ -270,23 +260,11 @@ function buildWardrobePart3D(root, selectableMeshes, comp, palette, r = 0) {
       Math.min(r, 3),
     );
 
-    addBoxPart(
-      root,
-      selectableMeshes,
-      [w, h, 8],
-      [0, 0, d / 2 - 4],
-      edgeMat,
-      comp.id,
-      false,
-      2,
-    );
-
-    addEdgeHighlight(root, body, toneColor(base, 0.24).getHex(), 0.06);
     return true;
   }
 
   if (comp.type === "wr_drawer_front") {
-    const body = addBoxPart(
+    addBoxPart(
       root,
       selectableMeshes,
       [w, h, Math.max(18, d)],
@@ -297,18 +275,6 @@ function buildWardrobePart3D(root, selectableMeshes, comp, palette, r = 0) {
       3,
     );
 
-    addBoxPart(
-      root,
-      selectableMeshes,
-      [Math.max(40, w - 16), Math.max(40, h - 16), 4],
-      [0, 0, d / 2 - 2],
-      edgeMat,
-      comp.id,
-      false,
-      2,
-    );
-
-    addEdgeHighlight(root, body, toneColor(base, 0.24).getHex(), 0.08);
     return true;
   }
 

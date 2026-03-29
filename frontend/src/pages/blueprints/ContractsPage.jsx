@@ -36,7 +36,7 @@ const formatCurrencyUI = (value) =>
   })}`;
 
 const formatCurrencyPdf = (value) =>
-  `PHP ${Number(value || 0).toLocaleString("en-PH", {
+  `Php ${Number(value || 0).toLocaleString("en-PH", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
@@ -47,6 +47,24 @@ const formatDate = (value) => {
   if (Number.isNaN(d.getTime())) return "—";
   return d.toLocaleDateString("en-PH");
 };
+
+const formatDatePdf = (value) => {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("en-PH", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+};
+
+const formatPersonName = (value) =>
+  String(value || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLowerCase()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
 
 function parseNumberedSections(text = "") {
   const normalized = String(text || "").replace(/\r/g, "").trim();
@@ -207,7 +225,7 @@ export default function ContractsPage() {
       const bottomLimit = pageHeight - 18;
 
       let y = 16;
-      let firstPage = true;
+      const customerDisplayName = formatPersonName(c.customer_name);
 
       const drawFrame = () => {
         doc.setDrawColor(45, 45, 45);
@@ -219,31 +237,28 @@ export default function ContractsPage() {
         doc.rect(8, 8, pageWidth - 16, pageHeight - 16);
       };
 
-      const drawPageHeader = (isFirst = false) => {
-        if (isFirst) {
-          doc.setFont("helvetica", "bold");
-          doc.setFontSize(15);
-          doc.text("PROJECT CONTRACT AGREEMENT", pageWidth / 2, y, {
-            align: "center",
-          });
-          y += 7;
+      const drawPageHeader = () => {
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(15);
+        doc.text("PROJECT CONTRACT AGREEMENT", pageWidth / 2, y, {
+          align: "center",
+        });
+        y += 7;
 
-          doc.setFont("helvetica", "normal");
-          doc.setFontSize(8.5);
-          const introText = `This Contract Agreement is entered into by and between Spiral Wood Services and ${
-            c.customer_name || "the Customer"
-          } under the terms and conditions stated below.`;
-          const introLines = doc.splitTextToSize(introText, contentWidth - 26);
-          doc.text(introLines, pageWidth / 2, y, { align: "center" });
-          y += introLines.length * 3.9 + 5;
-        }
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8.5);
+        const introText = `This Contract Agreement is entered into by and between Spiral Wood Services and ${
+          customerDisplayName || "the Customer"
+        } under the terms and conditions stated below.`;
+        const introLines = doc.splitTextToSize(introText, contentWidth - 26);
+        doc.text(introLines, pageWidth / 2, y, { align: "center" });
+        y += introLines.length * 3.9 + 6;
       };
 
       const addPage = () => {
         doc.addPage();
         drawFrame();
         y = 14;
-        firstPage = false;
       };
 
       const ensureSpace = (needed = 10) => {
@@ -303,9 +318,7 @@ export default function ContractsPage() {
         y += 2.4;
       };
 
-      const drawMiniSection = (title, rows, x, width) => {
-        const labelWidth = title === "PARTIES INVOLVED" ? 25 : 30;
-
+      const drawMiniSection = (title, rows, x, width, defaultLabelWidth = 28) => {
         doc.setFont("helvetica", "bold");
         doc.setFontSize(9.3);
         doc.text(title, x, y);
@@ -314,13 +327,28 @@ export default function ContractsPage() {
 
         rows.forEach((row) => {
           const label = `${row.label}:`;
-          const value = row.value || "—";
+          const labelWidth = row.labelWidth ?? defaultLabelWidth;
 
           doc.setFont("helvetica", "bold");
           doc.setFontSize(8.2);
           doc.text(label, x, rowY);
 
+          if (row.line) {
+            const lineStartX = x + labelWidth;
+            const lineEndX = x + width - 2;
+
+            doc.setDrawColor(90, 90, 90);
+            doc.setLineWidth(0.25);
+            doc.line(lineStartX, rowY, lineEndX, rowY);
+
+            rowY += 4.6;
+            return;
+          }
+
+          const value = row.value || "—";
+
           doc.setFont("helvetica", "normal");
+          doc.setFontSize(8.2);
           const wrapped = doc.splitTextToSize(String(value), width - labelWidth);
           doc.text(wrapped, x + labelWidth, rowY);
 
@@ -334,43 +362,56 @@ export default function ContractsPage() {
       const warrantyText = c.warranty_terms || DEFAULT_WARRANTY;
 
       drawFrame();
-      drawPageHeader(true);
+      drawPageHeader();
 
-      // Top two-column details
       const leftX = margin;
-      const rightX = 108;
-      const colWidth = 84;
+      const rightX = 107;
+      const colWidth = 82;
 
       const partiesRows = [
-        { label: "Company Name", value: "Spiral Wood Services" },
+        { label: "Company Name", value: "Spiral Wood Services", labelWidth: 30 },
         {
           label: "Authorized Person / Project In-Charge",
-          value: "__________________________",
+          line: true,
+          labelWidth: 63,
         },
         {
           label: "Customer Name",
-          value: c.customer_name || "__________________________",
+          value: customerDisplayName || "____________________",
+          labelWidth: 30,
         },
       ];
 
       const projectRows = [
-        { label: "Contract No", value: `CNT-${String(c.id).padStart(5, "0")}` },
-        { label: "Order No", value: `#${String(c.order_id).padStart(5, "0")}` },
+        { label: "Contract No", value: `CNT-${String(c.id).padStart(5, "0")}`, labelWidth: 27 },
+        { label: "Order No", value: `#${String(c.order_id).padStart(5, "0")}`, labelWidth: 27 },
         {
           label: "Blueprint Ref",
           value: c.blueprint_id
             ? `BP-${String(c.blueprint_id).padStart(5, "0")}`
-            : "Not specified",
+            : "N/A",
+          labelWidth: 27,
         },
-        { label: "Date Issued", value: formatDate(c.created_at) },
-        { label: "Total Amount", value: formatCurrencyPdf(c.total_amount || 0) },
+        { label: "Date Issued", value: formatDatePdf(c.created_at), labelWidth: 27 },
+        { label: "Total Amount", value: formatCurrencyPdf(c.total_amount || 0), labelWidth: 27 },
       ];
 
       ensureSpace(30);
-      const startY = y;
-      const leftEndY = drawMiniSection("1. PARTIES INVOLVED", partiesRows, leftX, colWidth);
-      const rightEndY = drawMiniSection("2. PROJECT DETAILS", projectRows, rightX, colWidth);
-      y = Math.max(leftEndY, rightEndY) + 3;
+      const leftEndY = drawMiniSection(
+        "1. PARTIES INVOLVED",
+        partiesRows,
+        leftX,
+        colWidth,
+        30
+      );
+      const rightEndY = drawMiniSection(
+        "2. PROJECT DETAILS",
+        projectRows,
+        rightX,
+        colWidth,
+        27
+      );
+      y = Math.max(leftEndY, rightEndY) + 4;
 
       terms.forEach((section, index) => {
         drawSection(index + 3, section.title, section.body);

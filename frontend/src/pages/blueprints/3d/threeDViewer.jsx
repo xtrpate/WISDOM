@@ -9,6 +9,7 @@ import React, {
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { TransformControls } from "three/examples/jsm/controls/TransformControls";
+import { getTemplateLibraryPartGroups } from "../data/templateComponents";
 import { createFurnitureObject } from "./createFurnitureObjects";
 import {
   WOOD_FINISHES,
@@ -265,20 +266,29 @@ function Floating3DPalette({ onAdd, activeBuildLabel, isOpen, onToggle }) {
   const filteredGroups = useMemo(() => {
     const query = search.trim().toLowerCase();
 
-    return COMPONENT_LIBRARY_GROUPS.map((group) => {
-      const bucket = getLibraryBucket(group.label);
-      const tabMatches = activeTab === "all" || bucket === activeTab;
+    const mergedGroups = [
+      ...COMPONENT_LIBRARY_GROUPS.filter(
+        (group) => group.label !== "Chair Parts",
+      ),
+      ...getTemplateLibraryPartGroups(),
+    ];
 
-      const items = (group.items || []).filter((item) => {
-        const haystack =
-          `${item.label || ""} ${item.type || ""} ${item.category || ""}`.toLowerCase();
+    return mergedGroups
+      .map((group) => {
+        const bucket = getLibraryBucket(group.label);
+        const tabMatches = activeTab === "all" || bucket === activeTab;
 
-        const searchMatches = !query || haystack.includes(query);
-        return tabMatches && searchMatches;
-      });
+        const items = (group.items || []).filter((item) => {
+          const haystack =
+            `${item.label || ""} ${item.type || ""} ${item.category || ""}`.toLowerCase();
 
-      return { ...group, items };
-    }).filter((group) => group.items.length > 0);
+          const searchMatches = !query || haystack.includes(query);
+          return tabMatches && searchMatches;
+        });
+
+        return { ...group, items };
+      })
+      .filter((group) => group.items.length > 0);
   }, [activeTab, search]);
 
   return (
@@ -1209,8 +1219,8 @@ function ThreeDViewer({
           center.y + dist * 0.65,
           center.z + dist,
         );
-        camera.near = 0.1;
-        camera.far = Math.max(18000, dist * 8);
+        camera.near = 0.5;
+        camera.far = Math.max(12000, dist * 6);
         camera.updateProjectionMatrix();
       }
 
@@ -1247,8 +1257,8 @@ function ThreeDViewer({
         center.y + distance * 0.65,
         center.z + distance,
       );
-      camera.near = 0.1;
-      camera.far = Math.max(18000, distance * 8);
+      camera.near = 0.5;
+      camera.far = Math.max(12000, distance * 6);
       camera.updateProjectionMatrix();
 
       orbit.target.copy(center);
@@ -1486,7 +1496,6 @@ function ThreeDViewer({
 
     const renderer = new THREE.WebGLRenderer({
       antialias: true,
-      logarithmicDepthBuffer: true,
       powerPreference: "high-performance",
     });
     renderer.setSize(w, h);
@@ -1512,7 +1521,7 @@ function ThreeDViewer({
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x16263d);
 
-    const camera = new THREE.PerspectiveCamera(38, w / h, 0.1, 18000);
+    const camera = new THREE.PerspectiveCamera(38, w / h, 0.5, 12000);
     camera.position.set(1100, 760, 1100);
 
     scene.add(new THREE.AmbientLight(0xffffff, 1.15));
@@ -1520,15 +1529,19 @@ function ThreeDViewer({
     const hemi = new THREE.HemisphereLight(0xf4f8ff, 0x223248, 1.45);
     scene.add(hemi);
 
-    const keyLight = new THREE.DirectionalLight(0xffffff, 2.4);
+    const keyLight = new THREE.DirectionalLight(0xffffff, 2.2);
     keyLight.position.set(1400, 2200, 1200);
     keyLight.castShadow = true;
-    keyLight.shadow.mapSize.set(2048, 2048);
+    keyLight.shadow.mapSize.set(4096, 4096);
     keyLight.shadow.camera.left = -3200;
     keyLight.shadow.camera.right = 3200;
     keyLight.shadow.camera.top = 3200;
     keyLight.shadow.camera.bottom = -3200;
-    keyLight.shadow.bias = -0.00008;
+    keyLight.shadow.camera.near = 200;
+    keyLight.shadow.camera.far = 7000;
+    keyLight.shadow.bias = 0.00035;
+    keyLight.shadow.normalBias = 0.85;
+    keyLight.shadow.radius = 2;
     scene.add(keyLight);
 
     const fillLight = new THREE.DirectionalLight(0xdbeafe, 1.15);

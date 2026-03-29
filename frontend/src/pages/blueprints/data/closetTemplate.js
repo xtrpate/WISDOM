@@ -134,6 +134,7 @@ export function createClosetWardrobeComponents(
   const vertical = ({
     x,
     y,
+    z = originZ,
     width = t,
     height,
     depth = d,
@@ -148,7 +149,7 @@ export function createClosetWardrobeComponents(
       partCode,
       x,
       y,
-      z: originZ,
+      z,
       width,
       height,
       depth,
@@ -477,6 +478,7 @@ export function createClosetWardrobeComponents(
     vertical({
       x: bay3SupportX,
       y: bay3TableTopY + shelfT,
+      z: bay3TableZ,
       height: baseDeckY - (bay3TableTopY + shelfT),
       depth: bay3TableD,
       label: "Bay 3 Table Support",

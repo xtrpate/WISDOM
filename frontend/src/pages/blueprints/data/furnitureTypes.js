@@ -5,6 +5,8 @@ import { TRIANGLE_TYPES } from "../shapes/triangleShape";
 import { CUBE_TYPES } from "../shapes/cubeShape";
 import { TRAPEZOID_TYPES } from "../shapes/trapezoidShape";
 
+
+
 const CABINET_COMPONENT_TYPES = [
   {
     label: "Upper Cabinet",

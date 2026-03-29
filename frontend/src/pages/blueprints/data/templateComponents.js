@@ -1179,6 +1179,101 @@ function createImportedDiningChairComponents(
   );
 }
 
+
+const TEMPLATE_LIBRARY_SPECS = [
+  {
+    label: "Wooden Dining Table",
+    type: "template_dining_table",
+  },
+  {
+    label: "Wooden Bed Frame",
+    type: "template_bed_frame",
+  },
+  {
+    label: "Wooden Wardrobe / Cabinet",
+    type: "template_wardrobe",
+  },
+  {
+    label: "Wooden Coffee Table",
+    type: "template_coffee_table",
+  },
+  {
+    label: "Closet / Wardrobe Cabinet",
+    type: "template_closet_wardrobe",
+  },
+];
+
+function mapTemplatePartToLibraryItem(part = {}, templateInfo = {}) {
+  return {
+    label: part.label || "Part",
+    type: part.type || "part",
+    category: `${templateInfo.label || "Template"} Parts`,
+    sourceTemplateType: templateInfo.type || "",
+    sourceTemplateLabel: templateInfo.label || "",
+    partCode: part.partCode || "",
+    w: Number(part.width) || GRID_SIZE,
+    h: Number(part.height) || GRID_SIZE,
+    d: Number(part.depth) || GRID_SIZE,
+    fill: part.fill || "#d9c2a5",
+    material: part.material || "Oak Wood",
+    unitPrice: Number(part.unitPrice) || 0,
+    blueprintStyle: part.blueprintStyle || "part",
+    cornerRadius: Number(part.cornerRadius) || 0,
+    isTemplatePart: true,
+  };
+}
+
+function getFurnitureTemplatePartGroups() {
+  return TEMPLATE_LIBRARY_SPECS.map((templateInfo) => {
+    const rawParts = buildFurnitureTemplateParts({
+      templateType: templateInfo.type,
+      buildId: makeGroupId(),
+      originX: 0,
+      originZ: 0,
+      canvasH: 3200,
+      groupLabel: templateInfo.label,
+    });
+
+    return {
+      label: `${templateInfo.label} Parts`,
+      items: rawParts.map((part) =>
+        mapTemplatePartToLibraryItem(part, templateInfo),
+      ),
+    };
+  }).filter((group) => Array.isArray(group.items) && group.items.length > 0);
+}
+
+function getChairTemplatePartGroups() {
+  const templateInfo = {
+    label: "Dining Chair Template",
+    type: "chair_template",
+  };
+
+  const rawParts = createDiningChairTemplateComponents(
+    0,
+    0,
+    3200,
+    makeGroupId(),
+    templateInfo.label,
+  );
+
+  return [
+    {
+      label: `${templateInfo.label} Parts`,
+      items: rawParts.map((part) =>
+        mapTemplatePartToLibraryItem(part, templateInfo),
+      ),
+    },
+  ];
+}
+
+function getTemplateLibraryPartGroups() {
+  return [
+    ...getFurnitureTemplatePartGroups(),
+    ...getChairTemplatePartGroups(),
+  ];
+}
+
 function getChairManualPlacement(
   typeDef,
   existingGroupComponents,
@@ -1310,6 +1405,8 @@ function getChairManualPlacement(
       };
   }
 }
+
+
 
 function getChairExplodedBox(comp, groupComponents) {
   const slatIndex = groupComponents
@@ -1464,4 +1561,5 @@ export {
   createImportedDiningChairComponents,
   createClosetWardrobeComponents,
   createImportedFurnitureComponents,
+  getTemplateLibraryPartGroups,
 };
