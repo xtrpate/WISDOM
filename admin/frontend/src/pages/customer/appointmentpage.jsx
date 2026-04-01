@@ -10,7 +10,7 @@ import {
   UserCheck,
   X,
 } from "lucide-react";
-import { useAuth } from "./authcontext";
+import useAuthStore from "../../store/authStore";
 import "./appointmentpage.css";
 
 const getMinDate = () => {
@@ -128,7 +128,7 @@ const parseNotes = (notes) => {
 };
 
 export default function AppointmentPage() {
-  const { user } = useAuth();
+  const { user } = useAuthStore();
 
   const [purpose, setPurpose] = useState("consultation");
   const [project_description, setProjectDescription] = useState("");

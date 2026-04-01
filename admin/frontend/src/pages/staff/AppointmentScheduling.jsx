@@ -9,6 +9,7 @@ import {
   Check,
 } from "lucide-react";
 import { useAuth } from "./PosAuthContext";
+import useAuthStore from "../../store/authStore";
 
 const PURPOSE_LABELS = {
   consultation: "Consultation",
@@ -96,7 +97,7 @@ const labelStyle = {
 };
 
 export default function AppointmentScheduling() {
-  const { user } = useAuth();
+  const { user } = useAuthStore();
 
   const [appointments, setAppointments] = useState([]);
   const [showForm, setShowForm] = useState(false);

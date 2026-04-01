@@ -9,7 +9,6 @@
  */
 import { useState, useRef, useEffect } from "react";
 import axios from "axios";
-import { useAuth } from "./authcontext";
 import {
   User,
   Mail,
@@ -24,6 +23,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import "./profile.css";
+import useAuthStore from "../../store/authStore";
 
 /* ── Password strength helper ── */
 const getStrength = (pw) => {
@@ -62,7 +62,7 @@ const Alert = ({ type, msg }) =>
   ) : null;
 
 export default function ProfileSettings() {
-  const { user, setUser } = useAuth();
+  const { user, setUser } = useAuthStore();
   const fileRef = useRef(null);
 
   /* ─ State ─ */

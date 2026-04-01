@@ -17,10 +17,11 @@ import {
   AlertTriangle,
   Clock,
 } from "lucide-react";
+import useAuthStore from "../../store/authStore";
 
 const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
 export default function Dashboard() {
-  const { token } = useAuth();
+  const { token } = useAuthStore();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 

@@ -73,7 +73,7 @@ export const AuthProvider = ({ children }) => {
         }
 
         return Promise.reject(error);
-      }
+      },
     );
 
     return () => {

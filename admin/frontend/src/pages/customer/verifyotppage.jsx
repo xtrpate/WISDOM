@@ -5,11 +5,11 @@
  */
 import { useState, useRef, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { useAuth } from "./authcontext";
 import "./authpages.css";
+import useAuthStore from "../../store/authStore";
 
 export default function VerifyOtpPage() {
-  const { verifyOtp, resendOtp } = useAuth();
+  const { verifyOtp, resendOtp } = useAuthStore();
   const navigate = useNavigate();
   const location = useLocation();
 

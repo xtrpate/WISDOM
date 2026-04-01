@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import "./POSLayout.css";
+import useAuthStore from "../../store/authStore";
 
 const navItems = [
   {
@@ -75,7 +76,7 @@ const navItems = [
 ];
 
 export default function POSLayout() {
-  const { user, logout } = useAuth();
+  const { user, logout } = useAuthStore();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(true);
 

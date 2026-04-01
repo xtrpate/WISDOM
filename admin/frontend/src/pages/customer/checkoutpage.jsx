@@ -6,10 +6,10 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
-import { useAuth } from "./authcontext";
 import { useCart } from "./cartcontext";
 import { CheckCircle } from "lucide-react";
 import "./cart.css";
+import useAuthStore from "../../store/authStore";
 
 const PAYMENT_METHODS = [
   {
@@ -43,7 +43,7 @@ const PAYMENT_METHODS = [
 ];
 
 export default function CheckoutPage() {
-  const { user } = useAuth();
+  const { user } = useAuthStore();
   const { cart, removeItem, clearCart } = useCart();
 
   /* Read selected keys saved by CartPage — fall back to full cart */

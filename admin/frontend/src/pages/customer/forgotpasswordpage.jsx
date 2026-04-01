@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "./authcontext";
 import { Mail } from "lucide-react";
 import "./authpages.css";
+import useAuthStore from "../../store/authStore";
 
 export default function ForgotPasswordPage() {
-  const { forgotPassword } = useAuth();
+  const { forgotPassword } = useAuthStore();
   const navigate = useNavigate();
 
   const [email, setEmail] = useState("");

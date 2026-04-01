@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "./authcontext";
 import {
   User,
   Mail,
@@ -12,6 +11,7 @@ import {
   CheckCircle,
 } from "lucide-react";
 import "./authpages.css";
+import useAuthStore from "../../store/authStore";
 
 /* ── Password strength helper ── */
 const calcStrength = (pw) => {
@@ -26,7 +26,7 @@ const calcStrength = (pw) => {
 };
 
 export default function RegisterPage() {
-  const { register, verifyOtp, resendOtp } = useAuth();
+  const { register, verifyOtp, resendOtp } = useAuthStore();
   const navigate = useNavigate();
 
   /* ── Steps: 'form' | 'otp' | 'success' ── */

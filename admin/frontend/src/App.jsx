@@ -1,5 +1,6 @@
 // src/App.jsx – WISDOM Admin Panel root with React Router
 import React from "react";
+import axios from "axios";
 import {
   BrowserRouter,
   Routes,
@@ -59,7 +60,6 @@ import BackupPage from "./pages/backup/BackupPage";
 // ══════════════════════════════════════════════════════════════════════════════
 // ── Customer Imports ──────────────────────────────────────────────────────────
 // ══════════════════════════════════════════════════════════════════════════════
-import { AuthProvider as CustomerAuthProvider } from "./pages/customer/authcontext";
 import { CartProvider } from "./pages/customer/cartcontext";
 import { CustomCartProvider } from "./pages/customer/customcartcontext";
 import CustomerLayout from "./pages/customer/customerlayout.jsx";
@@ -74,11 +74,11 @@ import CustomCheckoutPage from "./pages/customer/customcheckoutpage";
 import AppointmentPage from "./pages/customer/appointmentpage";
 import OrdersPageCustomer from "./pages/customer/orderspage";
 import WarrantyPageCustomer from "./pages/customer/warrantypage";
+import ProfileSettings from "./pages/customer/profilesettings";
 
 // ══════════════════════════════════════════════════════════════════════════════
 // ── Staff Imports ─────────────────────────────────────────────────────────────
 // ══════════════════════════════════════════════════════════════════════════════
-import { AuthProvider as StaffAuthProvider } from "./pages/staff/PosAuthContext.jsx";
 import POSLayout from "./pages/staff/POSLayout.jsx";
 import POSDashboard from "./pages/staff/Dashboard";
 import POSProductSearch from "./pages/staff/ProductSearch";
@@ -90,6 +90,15 @@ import POSReceiptPage from "./pages/staff/ReceiptPage";
 import POSSalesReports from "./pages/staff/SalesReports";
 import POSBlueprintView from "./pages/staff/BlueprintView";
 import POSInventoryLookup from "./pages/staff/InventoryLookup";
+
+axios.interceptors.request.use((config) => {
+  const token =
+    localStorage.getItem("wisdom_token") || localStorage.getItem("token");
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
 
 // ── Auth Guard ────────────────────────────────────────────────────────────────
 function RequireAuth({ children, roles }) {
@@ -109,13 +118,7 @@ export default function App() {
           {/* ══════════════════════════════════════════════════════════════════
               CUSTOMER PORTAL
           ══════════════════════════════════════════════════════════════════ */}
-          <Route
-            element={
-              <CustomerAuthProvider>
-                <Outlet />
-              </CustomerAuthProvider>
-            }
-          >
+          <Route element={<Outlet />}>
             {/* Standalone Pages (No Navbar) */}
             <Route path="login" element={<CustomerLoginPage />} />
             <Route path="register" element={<RegisterPage />} />
@@ -141,6 +144,7 @@ export default function App() {
               <Route path="appointment" element={<AppointmentPage />} />
               <Route path="orders" element={<OrdersPageCustomer />} />
               <Route path="warranty" element={<WarrantyPageCustomer />} />
+              <Route path="profilesettings" element={<ProfileSettings />} />
             </Route>
           </Route>
           {/* ══════════════════════════════════════════════════════════════════
@@ -259,11 +263,9 @@ export default function App() {
           <Route
             path="/staff"
             element={
-              <StaffAuthProvider>
-                <RequireAuth roles={["admin", "staff"]}>
-                  <POSLayout />
-                </RequireAuth>
-              </StaffAuthProvider>
+              <RequireAuth roles={["admin", "staff"]}>
+                <POSLayout />
+              </RequireAuth>
             }
           >
             <Route index element={<Navigate to="dashboard" replace />} />

@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { useAuth } from "./authcontext";
 import { Mail, Lock, KeyRound, Eye, EyeOff } from "lucide-react";
 import "./authpages.css";
+import useAuthStore from "../../store/authStore";
 
 export default function ResetPasswordPage() {
-  const { forgotPassword, resetPassword } = useAuth();
+  const { forgotPassword, resetPassword } = useAuthStore();
   const navigate = useNavigate();
   const location = useLocation();
 

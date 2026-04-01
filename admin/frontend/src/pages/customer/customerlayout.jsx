@@ -3,7 +3,7 @@
  * Updated: 3-line hamburger on profile → dropdown with Settings + Logout
  */
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
-import { useAuth } from "./authcontext";
+import useAuthStore from "../../store/authStore";
 import {
   Home,
   Scissors,
@@ -34,7 +34,7 @@ const navItems = [
 ];
 
 export default function CustomerLayout() {
-  const { user, logout } = useAuth();
+  const { user, logout } = useAuthStore();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -197,7 +197,7 @@ export default function CustomerLayout() {
                     className="nav-dropdown-item"
                     onClick={() => {
                       setDropdownOpen(false);
-                      navigate("/settings");
+                      navigate("/profilesettings");
                     }}
                   >
                     <Settings size={15} /> Settings
@@ -242,7 +242,7 @@ export default function CustomerLayout() {
               </NavLink>
             ))}
             <NavLink
-              to="/settings"
+              to="/profilesettings"
               className={({ isActive }) =>
                 `mobile-nav-link ${isActive ? "active" : ""}`
               }

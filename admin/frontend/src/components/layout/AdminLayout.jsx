@@ -1,5 +1,5 @@
 // src/components/layout/AdminLayout.jsx – Sidebar + topbar shell
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import useAuthStore from "../../store/authStore";
 import toast from "react-hot-toast";
@@ -121,6 +121,13 @@ export default function AdminLayout() {
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
   const [open, setOpen] = useState(true);
+
+  useEffect(() => {
+    if (user && user.role === "customer") {
+      toast.error("Access restricted. Redirecting to storefront.");
+      navigate("/");
+    }
+  }, [user, navigate]);
 
   const handleLogout = () => {
     logout();

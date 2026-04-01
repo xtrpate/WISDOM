@@ -6,9 +6,9 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { Scissors, CheckCircle, ArrowRight } from "lucide-react";
-import { useAuth } from "./authcontext";
 import { useCustomCart } from "./customcartcontext";
 import "./customizepage.css";
+import useAuthStore from "../../store/authStore";
 
 const PAYMENT_METHODS = [
   {
@@ -39,7 +39,7 @@ const PAYMENT_METHODS = [
 
 export default function CustomCheckoutPage() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user } = useAuthStore();
   const { customCart, clearCustomCart } = useCustomCart();
 
   const [form, setForm] = useState({
