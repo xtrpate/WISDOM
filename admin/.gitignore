@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+
+# Environment variables (CRITICAL FOR SECURITY)
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# Frontend Build output
+admin/frontend/build/
+admin/frontend/dist/
+
+# Backend Uploads (Ignore user-uploaded images/pdfs during testing)
+admin/backend/uploads/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS generated files
+.DS_Store
+Thumbs.db
