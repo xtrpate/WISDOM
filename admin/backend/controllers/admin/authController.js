@@ -9,17 +9,27 @@ exports.login = async (req, res) => {
     const { email, password } = req.body;
 
     const [[user]] = await pool.query(
-      'SELECT * FROM users WHERE email = ? AND role IN ("admin","staff")',
+      'SELECT * FROM users WHERE LOWER(TRIM(email)) = LOWER(TRIM(?)) AND role IN ("admin","staff")',
       [email],
     );
 
-    if (!user) return res.status(401).json({ message: "Invalid credentials." });
-    if (!user.is_active)
-      return res.status(403).json({ message: "Account is deactivated." });
+    console.log('LOGIN email:', email);
+    console.log('USER FOUND:', !!user);
 
-    const match = await bcrypt.compare(password, user.password);
-    if (!match)
+    if (!user) {
       return res.status(401).json({ message: "Invalid credentials." });
+    }
+
+    if (!user.is_active) {
+      return res.status(403).json({ message: "Account is deactivated." });
+    }
+
+    const match = await bcrypt.compare(String(password || ''), String(user.password || ''));
+    console.log('PASSWORD MATCH:', match);
+
+    if (!match) {
+      return res.status(401).json({ message: "Invalid credentials." });
+    }
 
     // Update last_login
     await pool.query("UPDATE users SET last_login = NOW() WHERE id = ?", [

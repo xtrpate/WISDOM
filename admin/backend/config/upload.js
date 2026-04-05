@@ -109,7 +109,7 @@ exports.uploadWarrantyProof = multer({
 
 exports.uploadDeliveryReceipt = multer({
   storage: diskStorage('deliveries'),
-  fileFilter: fileFilter(ALLOWED_IMAGES, 'Delivery receipt'),
+  fileFilter: fileFilter(ALLOWED_DOCS, 'Delivery receipt'),
   limits: { fileSize: MAX_MB * 1024 * 1024 },
 }).single('receipt');
 

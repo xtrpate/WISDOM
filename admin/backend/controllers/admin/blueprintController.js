@@ -22,6 +22,9 @@ function normalizeEstimationItems(items = []) {
           ? Number(item.subtotal) || 0
           : quantity * unitCost;
 
+      const sourceType = String(item.source_type || item.sourceType || "").trim();
+      const sourceKey = String(item.source_key || item.sourceKey || "").trim();
+
       return {
         id: item.id || index + 1,
         name: item.name || item.description || "",
@@ -31,6 +34,10 @@ function normalizeEstimationItems(items = []) {
         unit_cost: unitCost,
         note: item.note || "",
         subtotal,
+
+        // preserve frontend row identity for regenerate logic
+        source_key: sourceKey,
+        source_type: sourceType || (sourceKey.startsWith("manual:") ? "manual" : ""),
       };
     })
     .filter((item) => item.name.trim() !== "");
@@ -309,6 +316,28 @@ async function deleteBlueprintCascade(conn, blueprintIds = []) {
   );
 }
 
+function normalizeBlueprintStageValue(value = '') {
+  return String(value || '').trim().toLowerCase();
+}
+
+function deriveDisplayBlueprintStage({
+  storedStage = '',
+  linkedOrderStatus = '',
+  isDeleted = 0,
+}) {
+  if (Number(isDeleted) === 1) return 'archived';
+
+  const normalizedStoredStage = normalizeBlueprintStageValue(storedStage);
+  const normalizedOrderStatus = normalizeBlueprintStageValue(linkedOrderStatus);
+
+  if (normalizedOrderStatus === 'completed') return 'completed';
+  if (['shipping', 'delivered'].includes(normalizedOrderStatus)) return 'delivery';
+  if (normalizedOrderStatus === 'production') return 'production';
+  if (normalizedOrderStatus === 'contract_released') return 'approval';
+
+  return normalizedStoredStage || 'design';
+}
+
 async function purgeExpiredArchivedBlueprints() {
   const conn = await pool.getConnection();
 
@@ -392,10 +421,93 @@ exports.getAll = async (req, res) => {
 
     const whereSQL = where.length ? `WHERE ${where.join(" AND ")}` : "";
 
+    const inferredLinkedOrderStatusSql = `
+      CASE
+        WHEN LOWER(COALESCE(o_link.status, '')) = 'cancelled' THEN 'cancelled'
+        WHEN LOWER(COALESCE(o_link.status, '')) = 'completed' THEN 'completed'
+
+        WHEN EXISTS (
+          SELECT 1
+          FROM deliveries d
+          WHERE d.order_id = o_link.id
+            AND COALESCE(d.signed_receipt, '') <> ''
+          LIMIT 1
+        ) THEN 'completed'
+
+        WHEN EXISTS (
+          SELECT 1
+          FROM deliveries d
+          WHERE d.order_id = o_link.id
+            AND LOWER(COALESCE(d.status, '')) = 'delivered'
+          LIMIT 1
+        ) THEN 'delivered'
+
+        WHEN EXISTS (
+          SELECT 1
+          FROM deliveries d
+          WHERE d.order_id = o_link.id
+          LIMIT 1
+        ) THEN 'shipping'
+
+        WHEN EXISTS (
+          SELECT 1
+          FROM project_tasks pt
+          WHERE pt.order_id = o_link.id
+          LIMIT 1
+        ) THEN
+          CASE
+            WHEN (
+              SELECT COUNT(*)
+              FROM project_tasks pt_pending
+              WHERE pt_pending.order_id = o_link.id
+                AND LOWER(COALESCE(pt_pending.status, '')) IN ('pending', 'in_progress')
+            ) > 0 THEN 'production'
+
+            WHEN (
+              SELECT COUNT(*)
+              FROM project_tasks pt_completed
+              WHERE pt_completed.order_id = o_link.id
+                AND LOWER(COALESCE(pt_completed.status, '')) = 'completed'
+            ) = (
+              SELECT COUNT(*)
+              FROM project_tasks pt_total
+              WHERE pt_total.order_id = o_link.id
+            ) THEN
+              CASE
+                WHEN LOWER(COALESCE(o_link.type, '')) IN ('walkin', 'walk-in') THEN 'completed'
+                ELSE 'shipping'
+              END
+
+            ELSE 'production'
+          END
+
+        WHEN EXISTS (
+          SELECT 1
+          FROM contracts c_link
+          WHERE c_link.order_id = o_link.id
+          LIMIT 1
+        ) THEN 'contract_released'
+
+        WHEN LOWER(COALESCE(o_link.status, '')) = 'processing' THEN 'production'
+        WHEN LOWER(COALESCE(o_link.status, '')) = 'shipped' THEN 'shipping'
+        WHEN LOWER(COALESCE(o_link.status, '')) NOT IN ('', 'null') THEN LOWER(COALESCE(o_link.status, ''))
+
+        ELSE ''
+      END
+    `;
+
     const baseFrom = `
       FROM blueprints b
       JOIN users u ON u.id = b.creator_id
       LEFT JOIN users c ON c.id = b.client_id
+      LEFT JOIN orders o_link
+        ON o_link.id = (
+          SELECT o2.id
+          FROM orders o2
+          WHERE o2.blueprint_id = b.id
+          ORDER BY o2.id DESC
+          LIMIT 1
+        )
     `;
 
     const [rows] = await pool.query(
@@ -405,6 +517,7 @@ exports.getAll = async (req, res) => {
               b.created_at, b.updated_at,
               u.name AS creator_name,
               c.name AS client_name,
+              ${inferredLinkedOrderStatusSql} AS linked_order_status,
               CASE
                 WHEN b.is_deleted = 1
                   THEN GREATEST(0, 30 - DATEDIFF(CURDATE(), DATE(COALESCE(b.archived_at, b.updated_at, b.created_at))))
@@ -434,7 +547,16 @@ exports.getAll = async (req, res) => {
       params,
     );
 
-    res.json({ rows, total });
+    const normalizedRows = rows.map((row) => ({
+      ...row,
+      display_stage: deriveDisplayBlueprintStage({
+        storedStage: row.stage,
+        linkedOrderStatus: row.linked_order_status,
+        isDeleted: row.is_deleted,
+      }),
+    }));
+
+    res.json({ rows: normalizedRows, total });
   } catch (err) {
     console.error("getAll blueprints error:", err);
     res.status(err.statusCode || 500).json({ message: err.message });
@@ -1078,3 +1200,98 @@ exports.saveEstimation = async (req, res) => {
     conn.release();
   }
 };
+<<<<<<< HEAD:admin/backend/controllers/admin/blueprintController.js
+=======
+
+// ── PATCH /api/blueprints/:id/estimation/approve ─────────────────────────────
+exports.approveEstimation = async (req, res) => {
+  const conn = await pool.getConnection();
+
+  try {
+    await conn.beginTransaction();
+
+    const [[bp]] = await conn.query(
+      `SELECT id, is_deleted
+       FROM blueprints
+       WHERE id = ?
+       LIMIT 1`,
+      [req.params.id]
+    );
+
+    if (!bp) {
+      await conn.rollback();
+      return res.status(404).json({ message: 'Blueprint not found.' });
+    }
+
+    if (Number(bp.is_deleted) === 1) {
+      await conn.rollback();
+      return res.status(400).json({
+        message: 'Cannot approve estimation for archived blueprint.',
+      });
+    }
+
+    const [[est]] = await conn.query(
+      `SELECT id, version, status
+       FROM estimations
+       WHERE blueprint_id = ?
+       ORDER BY version DESC, id DESC
+       LIMIT 1`,
+      [req.params.id]
+    );
+
+    if (!est) {
+      await conn.rollback();
+      return res.status(404).json({ message: 'No estimation found to approve.' });
+    }
+
+    if (String(est.status || '').toLowerCase() === 'approved') {
+      await conn.commit();
+      return res.json({
+        message: 'Estimation already approved.',
+        estimation: {
+          id: est.id,
+          blueprint_id: Number(req.params.id),
+          version: est.version,
+          status: 'approved',
+        },
+      });
+    }
+
+    await conn.query(
+      `UPDATE estimations
+       SET status = 'approved',
+           approved_by = ?,
+           approved_at = NOW()
+       WHERE id = ?`,
+      [req.user.id, est.id]
+    );
+
+    await conn.query(
+      `UPDATE blueprints
+       SET stage = 'approval'
+       WHERE id = ? AND is_deleted = 0`,
+      [req.params.id]
+    );
+
+    await conn.commit();
+
+    res.json({
+      message: 'Estimation approved.',
+      estimation: {
+        id: est.id,
+        blueprint_id: Number(req.params.id),
+        version: est.version,
+        status: 'approved',
+        approved_by: req.user.id,
+        approved_at: new Date().toISOString(),
+      },
+    });
+  } catch (err) {
+    await conn.rollback();
+    console.error('approveEstimation error:', err);
+    res.status(err.statusCode || 500).json({ message: err.message });
+  } finally {
+    conn.release();
+  }
+};
+>>>>>>> 4c8e2bc (Update current admin work):backend/controllers/blueprintController.js

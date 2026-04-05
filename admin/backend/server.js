@@ -7,7 +7,12 @@ const cors = require("cors");
 const rateLimit = require("express-rate-limit");
 const path = require("path");
 
+<<<<<<< HEAD:admin/backend/server.js
 const adminRoutes = require("./routes/admin"); // Admin central router
+=======
+
+const routes = require("./routes/index");
+>>>>>>> 4c8e2bc (Update current admin work):backend/server.js
 const { errorHandler } = require("./middleware/errorHandler");
 const { startCronJobs } = require("./services/cronService");
 const pool = require("./config/db");
@@ -19,7 +24,11 @@ const PORT = process.env.PORT || 5000;
 app.set("trust proxy", 1);
 
 // ── Security ──────────────────────────────────────────────────────────────────
-app.use(helmet());
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+  })
+);
 app.use(
   cors({
     origin: [
@@ -46,9 +55,10 @@ const limiter = rateLimit({
 app.use("/api", limiter);
 
 // ── Static File Serving ───────────────────────────────────────────────────────
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
-app.use("/backups", express.static(path.join(__dirname, "backups")));
+const uploadsDir = path.resolve(__dirname, "uploads");
+const backupsDir = path.resolve(__dirname, "backups");
 
+<<<<<<< HEAD:admin/backend/server.js
 // ── Unified API Routes ────────────────────────────────────────────────────────
 
 // 1. Admin Routes (Mounted at /api directly to preserve existing frontend calls)
@@ -79,6 +89,12 @@ app.use("/api/pos/tasks", require("./routes/pos.tasks"));
 app.use("/api/pos", require("./routes/pos.fulfillment"));
 app.use("/api/pos", require("./routes/pos.schedule"));
 app.use("/api/pos", require("./routes/pos.receipts"));
+=======
+app.use("/uploads", express.static(uploadsDir));
+app.use("/backups", express.static(backupsDir));
+// ── API Routes ────────────────────────────────────────────────────────────────
+app.use("/api", routes);
+>>>>>>> 4c8e2bc (Update current admin work):backend/server.js
 
 // ── Health Check ──────────────────────────────────────────────────────────────
 app.get("/health", async (req, res) => {
