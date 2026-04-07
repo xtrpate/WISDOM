@@ -75,6 +75,74 @@ const blueprintStyles = {
     backdropFilter: "blur(8px)",
     boxShadow: "0 10px 30px rgba(0,0,0,.25)",
   },
+
+  inspectorDockedPanel: {
+    position: "absolute",
+    top: 14,
+    right: 14,
+    width: 340,
+    maxHeight: "calc(100% - 28px)",
+    display: "flex",
+    flexDirection: "column",
+    overflow: "hidden",
+    background: "rgba(9,14,25,.88)",
+    border: "1px solid rgba(148,163,184,.14)",
+    borderRadius: 14,
+    padding: 12,
+    backdropFilter: "blur(8px)",
+    boxShadow: "0 10px 30px rgba(0,0,0,.25)",
+    zIndex: 9,
+  },
+
+  inspectorTabsRow: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: 8,
+    marginBottom: 10,
+  },
+
+  inspectorTabBtn: {
+    height: 36,
+    padding: "0 10px",
+    borderRadius: 10,
+    border: "1px solid rgba(71,85,105,.72)",
+    background: "rgba(11,20,36,.92)",
+    color: "#b7c5da",
+    cursor: "pointer",
+    fontSize: 11,
+    fontWeight: 700,
+  },
+
+  inspectorTabBtnActive: {
+    border: "1px solid rgba(96,165,250,.65)",
+    background:
+      "linear-gradient(180deg, rgba(37,99,235,.28) 0%, rgba(29,78,216,.2) 100%)",
+    color: "#eef4ff",
+    boxShadow: "inset 0 0 0 1px rgba(147,197,253,.08)",
+  },
+
+  inspectorTabBody: {
+    flex: 1,
+    minHeight: 0,
+    overflowY: "auto",
+    paddingRight: 2,
+  },
+
+  smartActionsPanelDocked: {
+    position: "relative",
+    inset: "auto",
+    width: "100%",
+    maxHeight: "none",
+    overflowY: "visible",
+    padding: 0,
+    borderRadius: 0,
+    background: "transparent",
+    border: "none",
+    boxShadow: "none",
+    backdropFilter: "none",
+    zIndex: "auto",
+  },
+
   floatingTitle: {
     fontSize: 12,
     fontWeight: 800,
@@ -212,6 +280,110 @@ const blueprintStyles = {
     color: "#ffffff",
     boxShadow: "0 0 0 1px rgba(147,197,253,.2) inset",
   },
+
+  smartActionsPanel: {
+    position: "absolute",
+    bottom: 14,
+    left: 14,
+    width: 320,
+    maxHeight: "calc(100% - 28px)",
+    overflowY: "auto",
+    padding: 12,
+    borderRadius: 14,
+    background: "rgba(9,14,25,.86)",
+    border: "1px solid rgba(148,163,184,.16)",
+    boxShadow: "0 10px 30px rgba(0,0,0,.28)",
+    backdropFilter: "blur(8px)",
+    zIndex: 8,
+    userSelect: "none",
+    WebkitUserSelect: "none",
+  },
+
+  smartActionsTitle: {
+    fontSize: 11,
+    fontWeight: 800,
+    color: "#e5efff",
+    textTransform: "uppercase",
+    letterSpacing: 1.1,
+    marginBottom: 4,
+  },
+  smartActionsSubtle: {
+    fontSize: 10,
+    color: "#94a3b8",
+    lineHeight: 1.4,
+    marginBottom: 10,
+  },
+  smartActionsSectionLabel: {
+    fontSize: 10,
+    fontWeight: 700,
+    color: "#64748b",
+    textTransform: "uppercase",
+    letterSpacing: 1,
+    margin: "10px 0 6px",
+  },
+  smartActionsGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+    gap: 6,
+  },
+
+  smartActionsWideGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: 6,
+  },
+  smartActionsFieldsRow: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: 6,
+    marginBottom: 8,
+  },
+  smartActionsField: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 4,
+  },
+  smartActionsInput: {
+    width: "100%",
+    height: 32,
+    padding: "0 8px",
+    borderRadius: 8,
+    border: "1px solid rgba(71,85,105,.72)",
+    background: "rgba(8,17,32,.96)",
+    color: "#e2e8f0",
+    fontSize: 11,
+    boxSizing: "border-box",
+  },
+
+  smartActionBtn: {
+    minHeight: 32,
+    padding: "0 8px",
+    borderRadius: 8,
+    border: "1px solid rgba(71,85,105,.72)",
+    background:
+      "linear-gradient(180deg, rgba(30,41,59,.96) 0%, rgba(15,23,42,.96) 100%)",
+    color: "#e2e8f0",
+    fontSize: 10,
+    fontWeight: 700,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  smartActionBtnWarn: {
+    minHeight: 32,
+    padding: "0 8px",
+    borderRadius: 8,
+    border: "1px solid rgba(245,158,11,.45)",
+    background:
+      "linear-gradient(180deg, rgba(120,53,15,.96) 0%, rgba(69,26,3,.96) 100%)",
+    color: "#fde68a",
+    fontSize: 10,
+    fontWeight: 700,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
   smallPill: {
     fontSize: 11,
     background: "rgba(20,184,166,.14)",
@@ -223,7 +395,6 @@ const blueprintStyles = {
     WebkitUserSelect: "none",
   },
   fullScreenWrapper: {
-    
     position: "fixed",
     top: 0,
     left: 0,
@@ -284,11 +455,142 @@ const blueprintStyles = {
   },
 
   librarySubtleText: {
-    fontSize: 11,
+    fontSize: 10,
     color: "#94a3b8",
-    lineHeight: 1.4,
-    marginTop: -4,
-    marginBottom: 8,
+    lineHeight: 1.45,
+    marginTop: 2,
+    marginBottom: 0,
+  },
+
+  libraryStickyTop: {
+    paddingBottom: 10,
+    marginBottom: 10,
+    borderBottom: "1px solid rgba(51,65,85,.72)",
+  },
+
+  librarySummaryRow: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 5,
+    marginTop: 8,
+  },
+
+  librarySummaryPill: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 20,
+    padding: "0 7px",
+    borderRadius: 999,
+    border: "1px solid rgba(71,85,105,.62)",
+    background: "rgba(11,20,36,.88)",
+    color: "#c7d3e6",
+    fontSize: 9,
+    fontWeight: 700,
+    lineHeight: 1,
+    letterSpacing: ".02em",
+    whiteSpace: "nowrap",
+    userSelect: "none",
+    WebkitUserSelect: "none",
+  },
+
+  librarySectionCard: {
+    border: "1px solid rgba(51,65,85,.76)",
+    background:
+      "linear-gradient(180deg, rgba(7,14,26,.96) 0%, rgba(5,11,21,.96) 100%)",
+    borderRadius: 12,
+    padding: 6,
+    boxSizing: "border-box",
+  },
+
+  librarySectionToggle: {
+    width: "100%",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+    background: "transparent",
+    border: "none",
+    padding: 0,
+    cursor: "pointer",
+    textAlign: "left",
+  },
+
+  librarySectionToggleTitle: {
+    fontSize: 10,
+    fontWeight: 800,
+    color: "#94a3b8",
+    textTransform: "uppercase",
+    letterSpacing: 1.1,
+    lineHeight: 1.3,
+  },
+
+  librarySectionToggleMeta: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    flexShrink: 0,
+  },
+
+  librarySectionCount: {
+    minWidth: 18,
+    height: 18,
+    padding: "0 7px",
+    borderRadius: 999,
+    border: "1px solid rgba(71,85,105,.62)",
+    background: "rgba(15,23,42,.92)",
+    color: "#d7e3f7",
+    fontSize: 9,
+    fontWeight: 700,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    boxSizing: "border-box",
+  },
+
+  libraryChevron: {
+    width: 18,
+    height: 18,
+    borderRadius: 999,
+    border: "1px solid rgba(71,85,105,.62)",
+    background: "rgba(15,23,42,.92)",
+    color: "#c7d2fe",
+    fontSize: 10,
+    fontWeight: 800,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    boxSizing: "border-box",
+  },
+
+  librarySectionItems: {
+    display: "grid",
+    gap: 6,
+    marginTop: 8,
+  },
+
+  libraryItemPrimaryText: {
+    display: "block",
+    minWidth: 0,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+    fontSize: 10,
+    fontWeight: 700,
+    lineHeight: 1.35,
+    textAlign: "left",
+  },
+
+  libraryItemSecondaryText: {
+    display: "block",
+    minWidth: 0,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+    fontSize: 9,
+    fontWeight: 500,
+    lineHeight: 1.35,
+    textAlign: "left",
   },
 
   libraryCloseBtn: {
@@ -306,8 +608,8 @@ const blueprintStyles = {
 
   floatingSearchInput: {
     width: "100%",
-    height: 40,
-    padding: "0 12px",
+    height: 34,
+    padding: "0 10px",
     border: "1px solid rgba(71,85,105,.72)",
     borderRadius: 10,
     fontSize: 12,
@@ -325,30 +627,32 @@ const blueprintStyles = {
   },
 
   libraryTabBtn: {
-    height: 36,
-    padding: "0 10px",
-    borderRadius: 10,
+    height: 32,
+    padding: "0 8px",
+    borderRadius: 9,
     border: "1px solid rgba(71,85,105,.72)",
     background: "rgba(11,20,36,.9)",
     color: "#b7c5da",
     cursor: "pointer",
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: 700,
   },
 
   libraryTabBtnActive: {
     border: "1px solid rgba(96,165,250,.65)",
-    background: "linear-gradient(180deg, rgba(37,99,235,.28) 0%, rgba(29,78,216,.2) 100%)",
+    background:
+      "linear-gradient(180deg, rgba(37,99,235,.28) 0%, rgba(29,78,216,.2) 100%)",
     color: "#eef4ff",
     boxShadow: "inset 0 0 0 1px rgba(147,197,253,.08)",
   },
 
   libraryGroupsWrap: {
     display: "grid",
-    gap: 12,
+    gap: 8,
     overflowY: "auto",
     paddingRight: 4,
     marginRight: -4,
+    alignContent: "start",
   },
 
   libraryEmptyState: {
@@ -360,9 +664,7 @@ const blueprintStyles = {
     fontSize: 11,
     background: "rgba(10,18,32,.62)",
   },
-  
 };
-
 
 export default blueprintStyles;
 export { blueprintStyles as S };

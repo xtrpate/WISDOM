@@ -1,23 +1,32 @@
 // export/placementHelpers.js — Placement, exploded view, and export scaling helpers
 import {
-  getComponentsBounds3D,
   get2DBounds,
   getProjectedBox,
-  shouldMirrorView,
   getMirroredBox,
   getChairGroupOrigin,
   getNextChairOrigin,
   isChairPartType,
 } from "../data/componentUtils";
-import { CHAIR_PART_SET } from "../data/furnitureTypes";
 
-const GRID_SIZE = 20;
 const FLOOR_OFFSET = 40;
 const EXPORT_PAGE_W = 1200;
 const EXPORT_PAGE_H = 820;
 const DRAWING_PADDING = 56;
 const TITLE_BLOCK_H = 96;
 const PAPER_MARGIN = 28;
+
+function compactText(value = "") {
+  return String(value ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizeTokenText(value = "") {
+  return compactText(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
 
 function getChairManualPlacement(
   typeDef,
@@ -239,24 +248,171 @@ function getChairExplodedBox(comp, groupComponents) {
   }
 }
 
-function getGenericExplodedBox(comp, index) {
-  const col = index % 3;
-  const row = Math.floor(index / 3);
+function isDiningTableGroup(groupComponents = []) {
+  if (!Array.isArray(groupComponents) || groupComponents.length < 6)
+    return false;
+  const matches = groupComponents.filter((comp) => {
+    const partCode = compactText(comp?.partCode);
+    const type = compactText(comp?.type);
+    const groupLabel = compactText(comp?.groupLabel);
+    const templateType = compactText(comp?.templateType);
+    const label = compactText(comp?.label);
+
+    return (
+      /^DT[-_]/i.test(partCode) ||
+      /^dt_/i.test(type) ||
+      /dining table/i.test(groupLabel) ||
+      /dining table/i.test(templateType) ||
+      /top panel|apron|leg/i.test(label)
+    );
+  }).length;
+
+  return matches >= Math.max(5, Math.floor(groupComponents.length * 0.65));
+}
+
+function getDiningTablePartRole(comp = {}) {
+  const partCode = normalizeTokenText(comp?.partCode);
+  const label = normalizeTokenText(comp?.label);
+  const type = normalizeTokenText(comp?.type);
+
+  if (
+    /\btop\b/.test(partCode) ||
+    /top panel/.test(label) ||
+    /table top/.test(type)
+  ) {
+    return "top";
+  }
+
+  if (/\baf\b/.test(partCode) || /front apron/.test(label)) return "frontApron";
+  if (/\bar2\b/.test(partCode) || /right apron/.test(label))
+    return "rightApron";
+  if (/\bal\b/.test(partCode) || /left apron/.test(label)) return "leftApron";
+  if (
+    /\bar\b/.test(partCode) ||
+    /rear apron/.test(label) ||
+    /back apron/.test(label)
+  ) {
+    return "rearApron";
+  }
+  if (/\bfl\b/.test(partCode) || /front leg l/.test(label)) return "frontLegL";
+  if (/\bfr\b/.test(partCode) || /front leg r/.test(label)) return "frontLegR";
+  if (/\bbl\b/.test(partCode) || /back leg l/.test(label)) return "backLegL";
+  if (/\bbr\b/.test(partCode) || /back leg r/.test(label)) return "backLegR";
+
+  return "other";
+}
+
+function getDiningTableVisualSize(comp, role) {
+  const width = Number(comp?.width) || 0;
+  const height = Number(comp?.height) || 0;
+  const depth = Number(comp?.depth) || 0;
+
+  switch (role) {
+    case "top":
+      return {
+        w: Math.max(280, Math.min(380, width * 0.16)),
+        h: Math.max(88, Math.min(122, depth * 0.11)),
+      };
+
+    case "frontApron":
+    case "rearApron":
+      return {
+        w: Math.max(250, Math.min(340, Math.max(width, depth) * 0.19)),
+        h: Math.max(36, Math.min(56, Math.max(height, depth) * 0.36)),
+      };
+
+    case "leftApron":
+    case "rightApron":
+      return {
+        w: Math.max(50, Math.min(76, Math.min(width, depth) * 1.15)),
+        h: Math.max(144, Math.min(214, Math.max(width, depth) * 0.21)),
+      };
+
+    default:
+      return {
+        w: Math.max(54, Math.min(76, Math.max(width, depth) * 0.68)),
+        h: Math.max(160, Math.min(250, height * 0.28)),
+      };
+  }
+}
+
+function getDiningTableExplodedBox(comp) {
+  const role = getDiningTablePartRole(comp);
+  const { w, h } = getDiningTableVisualSize(comp, role);
+
+  const slots = {
+    top: { x: 600, y: 72, labelSide: "top", labelLane: 0 },
+    leftApron: { x: 214, y: 214, labelSide: "left", labelLane: 0 },
+    frontApron: { x: 410, y: 250, labelSide: "left", labelLane: 1 },
+    rearApron: { x: 790, y: 250, labelSide: "right", labelLane: 1 },
+    rightApron: { x: 986, y: 214, labelSide: "right", labelLane: 0 },
+    frontLegL: { x: 276, y: 438, labelSide: "left", labelLane: 2 },
+    backLegL: { x: 430, y: 438, labelSide: "left", labelLane: 3 },
+    frontLegR: { x: 770, y: 438, labelSide: "right", labelLane: 2 },
+    backLegR: { x: 924, y: 438, labelSide: "right", labelLane: 3 },
+    other: { x: 600, y: 462, labelSide: "bottom", labelLane: 1 },
+  };
+
+  const slot = slots[role] || slots.other;
+
   return {
-    x: 80 + col * 270,
-    y: 70 + row * 190,
-    w: Math.max(90, Math.min(240, comp.width * 0.18)),
-    h: Math.max(70, Math.min(150, comp.height * 0.18)),
+    x: slot.x - w / 2,
+    y: slot.y,
+    w,
+    h,
+    labelSide: slot.labelSide,
+    labelLane: slot.labelLane,
+  };
+}
+
+function getGenericExplodedBox(comp, index, groupComponents = []) {
+  const total = Array.isArray(groupComponents) ? groupComponents.length : 0;
+  const cols = total <= 4 ? 2 : total <= 8 ? 3 : 4;
+  const col = index % cols;
+  const row = Math.floor(index / cols);
+  const cellW = cols === 4 ? 220 : cols === 3 ? 290 : 380;
+  const cellH = 180;
+
+  const visualW = Math.max(
+    88,
+    Math.min(
+      cols === 4 ? 172 : 228,
+      Math.max(Number(comp?.width) || 0, Number(comp?.depth) || 0) * 0.18,
+    ),
+  );
+  const visualH = Math.max(
+    58,
+    Math.min(
+      142,
+      Math.max(Number(comp?.height) || 0, Number(comp?.depth) || 0) * 0.18,
+    ),
+  );
+
+  const labelSide = col < cols / 2 ? "left" : "right";
+  const laneBase = row * 2 + (col < cols / 2 ? col : cols - col - 1);
+
+  return {
+    x: 110 + col * cellW + (cellW - visualW) / 2,
+    y: 90 + row * cellH + (cellH - visualH) / 2,
+    w: visualW,
+    h: visualH,
+    labelSide,
+    labelLane: Math.max(0, Math.min(5, laneBase)),
   };
 }
 
 function getExplodedBox(comp, groupComponents, index) {
+  if (isDiningTableGroup(groupComponents)) {
+    return getDiningTableExplodedBox(comp);
+  }
+
   const isChairGroup = groupComponents.some(
     (c) => c.groupType === "chair" || isChairPartType(c.type),
   );
+
   return isChairGroup
     ? getChairExplodedBox(comp, groupComponents)
-    : getGenericExplodedBox(comp, index);
+    : getGenericExplodedBox(comp, index, groupComponents);
 }
 
 function getExportDrawingArea(pageW = EXPORT_PAGE_W, pageH = EXPORT_PAGE_H) {
@@ -317,7 +473,7 @@ function getScaledExportItems(
   const scale = Math.min(
     drawingArea.w / Math.max(bounds2D.width, 1),
     drawingArea.h / Math.max(bounds2D.height, 1),
-    view === "exploded" ? 0.96 : 1.1,
+    view === "exploded" ? 0.82 : 1.1,
   );
 
   const offsetX = drawingArea.x + (drawingArea.w - bounds2D.width * scale) / 2;
@@ -330,6 +486,10 @@ function getScaledExportItems(
       y: offsetY + (item.box.y - bounds2D.minY) * scale,
       w: Math.max(8, item.box.w * scale),
       h: Math.max(8, item.box.h * scale),
+      labelSide: item.box.labelSide || null,
+      labelLane: Number.isFinite(item.box.labelLane)
+        ? item.box.labelLane
+        : null,
     },
   }));
 

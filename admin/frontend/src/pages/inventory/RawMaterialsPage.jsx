@@ -12,12 +12,7 @@ const STOCK_COLORS = {
 export default function RawMaterialsPage() {
   const [items, setItems] = useState([]);
   const [total, setTotal] = useState(0);
-  const [filters, setFilters] = useState({
-    search: "",
-    category: "",
-    status: "",
-    page: 1,
-  });
+  const [filters, setFilters] = useState({ search: "", status: "", page: 1 });
   const [modal, setModal] = useState(null); // null | { mode: 'add'|'edit', data: {} }
   const [saving, setSaving] = useState(false);
   const [suppliers, setSuppliers] = useState([]);
@@ -26,14 +21,13 @@ export default function RawMaterialsPage() {
     const { data } = await api.get("/inventory/raw", {
       params: { ...filters, limit: 20 },
     });
-    setItems(data.rows || data); // Adjust based on your actual API response structure
-    setTotal(data.total || data.length);
+    setItems(data.rows);
+    setTotal(data.total);
   }, [filters]);
 
   useEffect(() => {
     load();
   }, [load]);
-
   useEffect(() => {
     api.get("/suppliers").then((r) => setSuppliers(r.data));
   }, []);
@@ -50,7 +44,6 @@ export default function RawMaterialsPage() {
         supplier_id: "",
       },
     });
-
   const openEdit = (item) => setModal({ mode: "edit", data: { ...item } });
 
   const handleSave = async (e) => {
@@ -82,78 +75,44 @@ export default function RawMaterialsPage() {
     setModal((m) => ({ ...m, data: { ...m.data, [k]: v } }));
 
   return (
-    <div style={{ padding: "20px" }}>
+    <div>
       <div style={header}>
         <h1 style={title}>Raw Materials Inventory</h1>
         <button onClick={openAdd} style={btnPrimary}>
-          + Add product
+          + Add Material
         </button>
       </div>
 
-      {/* Filters Section */}
-      <div style={filtersContainer}>
-        <div style={searchWrap}>
-          {/* Replaced PNG with inline SVG to fix folder import error */}
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="#94a3b8"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            style={{ position: "absolute", left: 14 }}
-          >
-            <circle cx="11" cy="11" r="8"></circle>
-            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-          </svg>
-          <input
-            placeholder="Search"
-            value={filters.search}
-            onChange={(e) =>
-              setFilters((f) => ({ ...f, search: e.target.value, page: 1 }))
-            }
-            style={inputRoundedSearch}
-          />
-        </div>
-
-        <select
-          value={filters.category}
+      <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
+        <input
+          placeholder="Search..."
+          value={filters.search}
           onChange={(e) =>
-            setFilters((f) => ({ ...f, category: e.target.value, page: 1 }))
+            setFilters((f) => ({ ...f, search: e.target.value, page: 1 }))
           }
-          style={inputRoundedSelect}
-        >
-          <option value="">Category: All</option>
-          <option value="cosmetics">Wood Types</option>
-          <option value="raw">Wood Parts</option>
-        </select>
-
+          style={inputSm}
+        />
         <select
           value={filters.status}
           onChange={(e) =>
             setFilters((f) => ({ ...f, status: e.target.value, page: 1 }))
           }
-          style={inputRoundedSelect}
+          style={inputSm}
         >
-          <option value="">Status: All</option>
+          <option value="">All Status</option>
           <option value="in_stock">In Stock</option>
           <option value="low_stock">Low Stock</option>
           <option value="out_of_stock">Out of Stock</option>
         </select>
       </div>
 
-      {/* Main Table */}
       <div style={tableCard}>
         <table
           style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}
         >
           <thead>
-            <tr>
+            <tr style={{ background: "#f8fafc" }}>
               {[
-                "#",
                 "Name",
                 "Supplier",
                 "Unit",
@@ -164,58 +123,59 @@ export default function RawMaterialsPage() {
                 "Status",
                 "Actions",
               ].map((h) => (
-                <th
-                  key={h}
-                  style={h === "Actions" ? { ...th, textAlign: "right" } : th}
-                >
+                <th key={h} style={th}>
                   {h}
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {items.map((item, index) => {
+            {items.map((item) => {
               const [bg, color] = STOCK_COLORS[item.stock_status] || [
-                "#fff",
+                "#f1f5f9",
                 "#475569",
               ];
-
               return (
-                <tr key={item.id} style={tr}>
-                  <td style={tdMuted}>{index + 1}</td>
-                  <td style={{ ...td, fontWeight: 500, color: "#1e293b" }}>
-                    {item.name}
+                <tr key={item.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                  <td style={td}>
+                    <strong>{item.name}</strong>
                   </td>
                   <td style={td}>{item.supplier_name || "—"}</td>
                   <td style={td}>{item.unit}</td>
                   <td style={{ ...td, fontWeight: 600 }}>{item.quantity}</td>
                   <td style={td}>{item.reorder_point}</td>
-                  <td style={{ ...td, color: "#059669" }}>
-                    ${Number(item.unit_cost).toFixed(2)}
-                  </td>
+                  <td style={td}>₱ {Number(item.unit_cost).toFixed(2)}</td>
                   <td style={td}>
-                    ${(item.quantity * item.unit_cost).toFixed(2)}
+                    ₱ {(item.quantity * item.unit_cost).toFixed(2)}
                   </td>
                   <td style={td}>
                     <span
                       style={{
-                        ...pillStyle,
-                        color: color !== "#475569" ? color : "#334155",
-                        borderColor: color !== "#475569" ? bg : "#cbd5e1",
+                        background: bg,
+                        color,
+                        padding: "2px 10px",
+                        borderRadius: 12,
+                        fontSize: 11,
+                        fontWeight: 600,
                       }}
                     >
-                      {item.stock_status?.replace("_", " ") || "Unknown"} ▾
+                      {item.stock_status?.replace("_", " ")}
                     </span>
                   </td>
-                  <td style={{ ...td, textAlign: "right" }}>
-                    <button onClick={() => openEdit(item)} style={btnIcon}>
-                      ✏️
+                  <td style={td}>
+                    <button onClick={() => openEdit(item)} style={btnEdit}>
+                      Edit
                     </button>
                     <button
                       onClick={() => handleDelete(item.id)}
-                      style={{ ...btnIcon, color: "#dc2626" }}
+                      style={{
+                        ...btnEdit,
+                        background: "#fee2e2",
+                        color: "#dc2626",
+                        marginLeft: 4,
+                      }}
                     >
-                      🗑️
+                      Del
                     </button>
                   </td>
                 </tr>
@@ -229,7 +189,7 @@ export default function RawMaterialsPage() {
       {modal && (
         <div style={overlay}>
           <div style={modalBox}>
-            <h3 style={{ margin: "0 0 20px", color: "#1e293b" }}>
+            <h3 style={{ margin: "0 0 20px" }}>
               {modal.mode === "add" ? "Add Raw Material" : "Edit Raw Material"}
             </h3>
             <form onSubmit={handleSave}>
@@ -238,9 +198,9 @@ export default function RawMaterialsPage() {
                 ["Unit *", "unit", "text", true],
                 ["Quantity", "quantity", "number"],
                 ["Reorder Point", "reorder_point", "number"],
-                ["Unit Cost ($)", "unit_cost", "number"],
+                ["Unit Cost (₱)", "unit_cost", "number"],
               ].map(([label, key, type, req]) => (
-                <div key={key} style={{ marginBottom: 16 }}>
+                <div key={key} style={{ marginBottom: 12 }}>
                   <label style={labelSm}>{label}</label>
                   <input
                     type={type || "text"}
@@ -251,7 +211,7 @@ export default function RawMaterialsPage() {
                   />
                 </div>
               ))}
-              <div style={{ marginBottom: 16 }}>
+              <div style={{ marginBottom: 12 }}>
                 <label style={labelSm}>Supplier</label>
                 <select
                   value={modal.data.supplier_id || ""}
@@ -271,7 +231,7 @@ export default function RawMaterialsPage() {
                   display: "flex",
                   gap: 10,
                   justifyContent: "flex-end",
-                  marginTop: 24,
+                  marginTop: 20,
                 }}
               >
                 <button
@@ -294,160 +254,93 @@ export default function RawMaterialsPage() {
 }
 
 // ─── Reusable styles ──────────────────────────────────────────────────────────
-
 const header = {
   display: "flex",
   justifyContent: "space-between",
   alignItems: "center",
-  marginBottom: 24,
+  marginBottom: 20,
 };
-const title = { fontSize: 26, fontWeight: 800, color: "#0f172a", margin: 0 };
-
-const filtersContainer = {
-  display: "flex",
-  gap: 12,
-  marginBottom: 24,
-  alignItems: "center",
-};
-const searchWrap = {
-  position: "relative",
-  display: "flex",
-  alignItems: "center",
-};
-const searchIcon = {
-  position: "absolute",
-  left: 14,
-  fontSize: 13,
-  color: "#94a3b8",
-};
-
-const inputRoundedSearch = {
-  padding: "10px 16px 10px 38px",
-  border: "1px solid #e2e8f0",
-  borderRadius: 20,
-  fontSize: 13,
-  minWidth: 220,
-  outline: "none",
-  color: "#475569",
-  background: "#fff",
-};
-
-const inputRoundedSelect = {
-  padding: "10px 32px 10px 16px", // Increased right padding for arrow
-  border: "1px solid #e2e8f0",
-  borderRadius: 20,
-  fontSize: 13,
-  minWidth: 160,
-  outline: "none",
-  color: "#475569",
-  background: "#fff",
-  cursor: "pointer",
-  appearance: "none",
-  WebkitAppearance: "none",
-  // SVG background arrow
-  backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`,
-  backgroundRepeat: "no-repeat",
-  backgroundPosition: "right 12px center",
-  backgroundSize: "14px",
-};
-
+const title = { fontSize: 22, fontWeight: 700, color: "#1e2a38", margin: 0 };
 const tableCard = {
   background: "#fff",
-  borderRadius: 16,
-  padding: "10px 24px 24px",
-  boxShadow: "0 4px 20px rgba(0,0,0,.03)",
+  borderRadius: 12,
+  boxShadow: "0 1px 6px rgba(0,0,0,.08)",
+  overflow: "hidden",
 };
 const th = {
   textAlign: "left",
-  padding: "16px 14px",
-  fontSize: 12,
+  padding: "11px 14px",
+  fontSize: 11,
   fontWeight: 600,
-  color: "#94a3b8",
+  color: "#64748b",
   textTransform: "uppercase",
-  letterSpacing: "0.5px",
-  borderBottom: "1px solid #f1f5f9",
 };
-const tr = {
-  borderBottom: "1px solid #f8fafc",
-  transition: "background 0.2s ease",
-};
-const td = { padding: "18px 14px", color: "#475569", fontSize: 14 };
-const tdMuted = { ...td, color: "#94a3b8", fontSize: 13 };
-
-const pillStyle = {
-  border: "1px solid #e2e8f0",
-  borderRadius: 20,
-  padding: "6px 14px",
-  fontSize: 12,
-  fontWeight: 600,
-  display: "inline-flex",
-  alignItems: "center",
-  cursor: "pointer",
-  background: "#fff",
-};
-
-const btnPrimary = {
-  padding: "10px 20px",
-  background: "#4f46e5",
-  color: "#fff",
-  border: "none",
-  borderRadius: 20,
-  cursor: "pointer",
+const td = { padding: "11px 14px", color: "#374151" };
+const inputSm = {
+  padding: "7px 12px",
+  border: "1px solid #d1d5db",
+  borderRadius: 6,
   fontSize: 13,
-  fontWeight: 600,
-  letterSpacing: "0.5px",
+  minWidth: 160,
 };
-const btnIcon = {
-  background: "none",
-  border: "none",
-  cursor: "pointer",
-  fontSize: 16,
-  opacity: 0.6,
-  padding: "4px 8px",
-};
-
 const inputFull = {
   width: "100%",
-  padding: "10px 14px",
-  border: "1px solid #cbd5e1",
-  borderRadius: 8,
-  fontSize: 14,
+  padding: "8px 12px",
+  border: "1px solid #d1d5db",
+  borderRadius: 6,
+  fontSize: 13,
   boxSizing: "border-box",
-  outlineColor: "#4f46e5",
 };
 const labelSm = {
+  fontSize: 12,
+  fontWeight: 600,
+  color: "#374151",
+  display: "block",
+  marginBottom: 4,
+};
+const btnPrimary = {
+  padding: "8px 18px",
+  background: "#1e40af",
+  color: "#fff",
+  border: "none",
+  borderRadius: 6,
+  cursor: "pointer",
   fontSize: 13,
   fontWeight: 600,
-  color: "#475569",
-  display: "block",
-  marginBottom: 6,
 };
 const btnGhost = {
-  padding: "10px 20px",
+  padding: "8px 18px",
   background: "#f1f5f9",
-  color: "#475569",
+  color: "#374151",
   border: "none",
-  borderRadius: 8,
+  borderRadius: 6,
   cursor: "pointer",
-  fontSize: 14,
-  fontWeight: 600,
+  fontSize: 13,
+};
+const btnEdit = {
+  padding: "4px 12px",
+  background: "#e0f2fe",
+  color: "#0369a1",
+  border: "none",
+  borderRadius: 6,
+  cursor: "pointer",
+  fontSize: 12,
 };
 const overlay = {
   position: "fixed",
   inset: 0,
-  background: "rgba(15, 23, 42, 0.4)",
+  background: "rgba(0,0,0,.5)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
   zIndex: 1000,
-  backdropFilter: "blur(2px)",
 };
 const modalBox = {
   background: "#fff",
-  borderRadius: 16,
-  padding: 32,
-  width: 480,
-  maxHeight: "85vh",
+  borderRadius: 12,
+  padding: 28,
+  width: 460,
+  maxHeight: "80vh",
   overflowY: "auto",
-  boxShadow: "0 25px 50px -12px rgba(0,0,0,.25)",
+  boxShadow: "0 20px 60px rgba(0,0,0,.3)",
 };

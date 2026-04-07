@@ -2,7 +2,7 @@
 // Separated to avoid circular dependency between utils.js and templateComponents.js
 import { useState, useEffect } from "react";
 import { normalizeComponent } from "./componentUtils";
-
+import { createImportedDiningChairComponents } from "./templateComponents";
 
 function resolveInitialComponents(
   savedData = {},
@@ -22,8 +22,16 @@ function resolveInitialComponents(
     return savedComponents;
   }
 
-  // Huwag nang auto-generate ng imported template
-  // kapag reference file pa lang ang meron.
+  if (referenceFile?.url) {
+    return createImportedDiningChairComponents(
+      savedData,
+      referenceFile,
+      blueprintData,
+      worldSize,
+    );
+  }
+
+  // fallback
   if (savedComponents.length > 0) {
     return savedComponents;
   }

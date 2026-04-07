@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Line, Bar } from 'react-chartjs-2';
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { Line, Bar } from "react-chartjs-2";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -11,8 +11,8 @@ import {
   Title,
   Tooltip,
   Legend,
-} from 'chart.js';
-import api from '../../services/api';
+} from "chart.js";
+import api from "../../services/api";
 
 ChartJS.register(
   CategoryScale,
@@ -27,62 +27,62 @@ ChartJS.register(
 );
 
 const PRESETS = [
-  { key: 'today', label: 'Today' },
-  { key: 'yesterday', label: 'Yesterday' },
-  { key: 'week', label: 'This Week' },
-  { key: 'last7', label: 'Last 7 Days' },
-  { key: 'month', label: 'This Month' },
-  { key: 'last30', label: 'Last 30 Days' },
-  { key: 'year', label: 'This Year' },
-  { key: 'last12m', label: 'Last 12 Months' },
-  { key: 'custom', label: 'Custom Range' },
+  { key: "today", label: "Today" },
+  { key: "yesterday", label: "Yesterday" },
+  { key: "week", label: "This Week" },
+  { key: "last7", label: "Last 7 Days" },
+  { key: "month", label: "This Month" },
+  { key: "last30", label: "Last 30 Days" },
+  { key: "year", label: "This Year" },
+  { key: "last12m", label: "Last 12 Months" },
+  { key: "custom", label: "Custom Range" },
 ];
 
-const peso = new Intl.NumberFormat('en-PH', {
-  style: 'currency',
-  currency: 'PHP',
+const peso = new Intl.NumberFormat("en-PH", {
+  style: "currency",
+  currency: "PHP",
   maximumFractionDigits: 0,
 });
 
-const num = new Intl.NumberFormat('en-PH');
+const num = new Intl.NumberFormat("en-PH");
 
 function formatChartLabel(value, chartMode) {
-  if (!value) return '—';
+  if (!value) return "—";
 
-  if (chartMode === 'monthly') {
-    const [year, month] = String(value).split('-');
+  if (chartMode === "monthly") {
+    const [year, month] = String(value).split("-");
     const date = new Date(Number(year), Number(month) - 1, 1);
-    return date.toLocaleDateString('en-PH', {
-      month: 'short',
-      year: 'numeric',
+    return date.toLocaleDateString("en-PH", {
+      month: "short",
+      year: "numeric",
     });
   }
 
   const date = new Date(`${value}T00:00:00`);
   if (Number.isNaN(date.getTime())) return value;
 
-  return date.toLocaleDateString('en-PH', {
-    month: 'short',
-    day: 'numeric',
+  return date.toLocaleDateString("en-PH", {
+    month: "short",
+    day: "numeric",
   });
 }
 
 function formatDateTime(value) {
-  if (!value) return '—';
+  if (!value) return "—";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
 
-  return date.toLocaleString('en-PH', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
+  return date.toLocaleString("en-PH", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
   });
 }
 
 function truncate(text, max = 28) {
-  if (!text) return '—';
+  if (!text) return "—";
   return text.length > max ? `${text.slice(0, max - 1)}…` : text;
 }
 
@@ -102,7 +102,7 @@ function MetricCard({ tone, eyebrow, title, value, meta }) {
   );
 }
 
-function MiniStat({ label, value, tone = 'slate' }) {
+function MiniStat({ label, value, tone = "slate" }) {
   return (
     <div className={`mini-stat mini-stat--${tone}`}>
       <div className="mini-stat__label">{label}</div>
@@ -132,16 +132,16 @@ function ProgressRow({ label, value, total, tone }) {
 
 function StatusBadge({ status }) {
   const map = {
-    pending: ['#fff7ed', '#c2410c', '#fdba74'],
-    confirmed: ['#eff6ff', '#1d4ed8', '#93c5fd'],
-    production: ['#faf5ff', '#7e22ce', '#d8b4fe'],
-    shipping: ['#ecfeff', '#0f766e', '#99f6e4'],
-    delivered: ['#f0fdf4', '#15803d', '#86efac'],
-    completed: ['#ecfdf5', '#047857', '#6ee7b7'],
-    cancelled: ['#fef2f2', '#b91c1c', '#fca5a5'],
+    pending: ["#fff7ed", "#c2410c", "#fdba74"],
+    confirmed: ["#eff6ff", "#1d4ed8", "#93c5fd"],
+    production: ["#faf5ff", "#7e22ce", "#d8b4fe"],
+    shipping: ["#ecfeff", "#0f766e", "#99f6e4"],
+    delivered: ["#f0fdf4", "#15803d", "#86efac"],
+    completed: ["#ecfdf5", "#047857", "#6ee7b7"],
+    cancelled: ["#fef2f2", "#b91c1c", "#fca5a5"],
   };
 
-  const [bg, color, border] = map[status] || ['#f8fafc', '#475569', '#cbd5e1'];
+  const [bg, color, border] = map[status] || ["#f8fafc", "#475569", "#cbd5e1"];
 
   return (
     <span
@@ -152,24 +152,24 @@ function StatusBadge({ status }) {
         borderColor: border,
       }}
     >
-      {status || 'unknown'}
+      {status || "unknown"}
     </span>
   );
 }
 
 function ChannelBadge({ channel }) {
-  const isOnline = channel === 'online';
+  const isOnline = channel === "online";
 
   return (
     <span
       className="dash-badge"
       style={{
-        background: isOnline ? '#eff6ff' : '#f0fdf4',
-        color: isOnline ? '#1d4ed8' : '#15803d',
-        borderColor: isOnline ? '#93c5fd' : '#86efac',
+        background: isOnline ? "#eff6ff" : "#f0fdf4",
+        color: isOnline ? "#1d4ed8" : "#15803d",
+        borderColor: isOnline ? "#93c5fd" : "#86efac",
       }}
     >
-      {channel || '—'}
+      {channel || "—"}
     </span>
   );
 }
@@ -178,21 +178,21 @@ export default function DashboardPage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [fetchError, setFetchError] = useState('');
-  const [rangeError, setRangeError] = useState('');
-  const [preset, setPreset] = useState('last30');
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
+  const [fetchError, setFetchError] = useState("");
+  const [rangeError, setRangeError] = useState("");
+  const [preset, setPreset] = useState("last30");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
 
   const loadDashboard = useCallback(
     async ({
-      presetArg = 'last30',
-      fromArg = '',
-      toArg = '',
+      presetArg = "last30",
+      fromArg = "",
+      toArg = "",
       silent = false,
     } = {}) => {
       try {
-        setFetchError('');
+        setFetchError("");
 
         if (silent) {
           setRefreshing(true);
@@ -201,16 +201,16 @@ export default function DashboardPage() {
         }
 
         const params =
-          presetArg === 'custom'
+          presetArg === "custom"
             ? { from: fromArg, to: toArg }
             : { preset: presetArg };
 
-        const res = await api.get('/dashboard', { params });
+        const res = await api.get("/dashboard", { params });
         setData(res.data);
       } catch (err) {
         const message =
           err.response?.data?.message ||
-          'Failed to load dashboard. Check your server connection.';
+          "Failed to load dashboard. Check your server connection.";
         setFetchError(message);
       } finally {
         setLoading(false);
@@ -221,21 +221,21 @@ export default function DashboardPage() {
   );
 
   useEffect(() => {
-    loadDashboard({ presetArg: 'last30' });
+    loadDashboard({ presetArg: "last30" });
   }, [loadDashboard]);
 
   const handlePresetChange = (key) => {
     setPreset(key);
-    setFetchError('');
-    setRangeError('');
+    setFetchError("");
+    setRangeError("");
 
-    if (key !== 'custom') {
-      setFrom('');
-      setTo('');
+    if (key !== "custom") {
+      setFrom("");
+      setTo("");
       loadDashboard({
         presetArg: key,
-        fromArg: '',
-        toArg: '',
+        fromArg: "",
+        toArg: "",
         silent: true,
       });
     }
@@ -243,20 +243,20 @@ export default function DashboardPage() {
 
   const handleApplyCustom = () => {
     if (!from || !to) {
-      setRangeError('Please select both start and end dates.');
+      setRangeError("Please select both start and end dates.");
       return;
     }
 
     if (from > to) {
-      setRangeError('Start date must be before end date.');
+      setRangeError("Start date must be before end date.");
       return;
     }
 
-    setRangeError('');
-    setPreset('custom');
+    setRangeError("");
+    setPreset("custom");
 
     loadDashboard({
-      presetArg: 'custom',
+      presetArg: "custom",
       fromArg: from,
       toArg: to,
       silent: true,
@@ -273,16 +273,18 @@ export default function DashboardPage() {
   };
 
   const activeLabel =
-    PRESETS.find((item) => item.key === preset)?.label || 'Custom Range';
+    PRESETS.find((item) => item.key === preset)?.label || "Custom Range";
 
   const inventory = data?.inventory || {};
   const orders = data?.orders || {};
   const sales = data?.sales || {};
   const salesChart = Array.isArray(data?.salesChart) ? data.salesChart : [];
   const topProducts = Array.isArray(data?.topProducts) ? data.topProducts : [];
-  const recentOrders = Array.isArray(data?.recentOrders) ? data.recentOrders : [];
+  const recentOrders = Array.isArray(data?.recentOrders)
+    ? data.recentOrders
+    : [];
   const dateRange = data?.dateRange || null;
-  const chartMode = data?.chartMode || 'daily';
+  const chartMode = data?.chartMode || "daily";
 
   const totalOrders = Number(orders.total_orders || 0);
   const completedOrders = Number(orders.completed_orders || 0);
@@ -305,28 +307,28 @@ export default function DashboardPage() {
       labels: chartLabels,
       datasets: [
         {
-          label: 'Online Sales',
+          label: "Online Sales",
           data: salesChart.map((row) => Number(row.online_sales || 0)),
-          borderColor: '#2563eb',
-          backgroundColor: 'rgba(37,99,235,0.08)',
+          borderColor: "#2563eb",
+          backgroundColor: "rgba(37,99,235,0.08)",
           fill: true,
           tension: 0.36,
           borderWidth: 2,
-          pointRadius: chartMode === 'monthly' ? 2.5 : 1.8,
+          pointRadius: chartMode === "monthly" ? 2.5 : 1.8,
           pointHoverRadius: 4,
-          pointBackgroundColor: '#2563eb',
+          pointBackgroundColor: "#2563eb",
         },
         {
-          label: 'Walk-in Sales',
+          label: "Walk-in Sales",
           data: salesChart.map((row) => Number(row.walkin_sales || 0)),
-          borderColor: '#10b981',
-          backgroundColor: 'rgba(16,185,129,0.08)',
+          borderColor: "#10b981",
+          backgroundColor: "rgba(16,185,129,0.08)",
           fill: true,
           tension: 0.36,
           borderWidth: 2,
-          pointRadius: chartMode === 'monthly' ? 2.5 : 1.8,
+          pointRadius: chartMode === "monthly" ? 2.5 : 1.8,
           pointHoverRadius: 4,
-          pointBackgroundColor: '#10b981',
+          pointBackgroundColor: "#10b981",
         },
       ],
     }),
@@ -335,12 +337,16 @@ export default function DashboardPage() {
 
   const topProductsData = useMemo(
     () => ({
-      labels: topProducts.slice(0, 8).map((item) => truncate(item.product_name, 24)),
+      labels: topProducts
+        .slice(0, 8)
+        .map((item) => truncate(item.product_name, 24)),
       datasets: [
         {
-          label: 'Units Sold',
-          data: topProducts.slice(0, 8).map((item) => Number(item.units_sold || 0)),
-          backgroundColor: '#4f46e5',
+          label: "Units Sold",
+          data: topProducts
+            .slice(0, 8)
+            .map((item) => Number(item.units_sold || 0)),
+          backgroundColor: "#4f46e5",
           borderRadius: 10,
           borderSkipped: false,
           barThickness: 14,
@@ -354,36 +360,37 @@ export default function DashboardPage() {
     () => ({
       responsive: true,
       maintainAspectRatio: false,
-      interaction: { mode: 'index', intersect: false },
+      interaction: { mode: "index", intersect: false },
       plugins: {
         legend: {
-          position: 'top',
-          align: 'start',
+          position: "top",
+          align: "start",
           labels: {
             usePointStyle: true,
             boxWidth: 8,
-            color: '#334155',
+            color: "#334155",
             font: { size: 11, weight: 600 },
             padding: 16,
           },
         },
         tooltip: {
-          backgroundColor: '#0f172a',
+          backgroundColor: "#0f172a",
           padding: 10,
           titleFont: { size: 11, weight: 700 },
           bodyFont: { size: 11 },
           callbacks: {
-            label: (ctx) => `${ctx.dataset.label}: ${peso.format(ctx.parsed.y || 0)}`,
+            label: (ctx) =>
+              `${ctx.dataset.label}: ${peso.format(ctx.parsed.y || 0)}`,
           },
         },
       },
       scales: {
         x: {
           ticks: {
-            color: '#64748b',
+            color: "#64748b",
             maxRotation: 0,
             autoSkip: true,
-            maxTicksLimit: chartMode === 'monthly' ? 12 : 8,
+            maxTicksLimit: chartMode === "monthly" ? 12 : 8,
             font: { size: 11 },
           },
           grid: { display: false },
@@ -392,12 +399,12 @@ export default function DashboardPage() {
         y: {
           beginAtZero: true,
           ticks: {
-            color: '#64748b',
+            color: "#64748b",
             callback: (value) => peso.format(value),
             font: { size: 11 },
           },
           grid: {
-            color: 'rgba(148,163,184,0.12)',
+            color: "rgba(148,163,184,0.12)",
           },
           border: { display: false },
         },
@@ -410,11 +417,11 @@ export default function DashboardPage() {
     () => ({
       responsive: true,
       maintainAspectRatio: false,
-      indexAxis: 'y',
+      indexAxis: "y",
       plugins: {
         legend: { display: false },
         tooltip: {
-          backgroundColor: '#0f172a',
+          backgroundColor: "#0f172a",
           padding: 10,
           titleFont: { size: 11, weight: 700 },
           bodyFont: { size: 11 },
@@ -427,18 +434,18 @@ export default function DashboardPage() {
         x: {
           beginAtZero: true,
           ticks: {
-            color: '#64748b',
+            color: "#64748b",
             precision: 0,
             font: { size: 11 },
           },
           grid: {
-            color: 'rgba(148,163,184,0.12)',
+            color: "rgba(148,163,184,0.12)",
           },
           border: { display: false },
         },
         y: {
           ticks: {
-            color: '#334155',
+            color: "#334155",
             font: { size: 11, weight: 600 },
           },
           grid: { display: false },
@@ -468,7 +475,9 @@ export default function DashboardPage() {
           <div className="dash-error-message">{fetchError}</div>
           <button
             className="dash-btn dash-btn-primary"
-            onClick={() => loadDashboard({ presetArg: preset, fromArg: from, toArg: to })}
+            onClick={() =>
+              loadDashboard({ presetArg: preset, fromArg: from, toArg: to })
+            }
           >
             Retry
           </button>
@@ -486,7 +495,8 @@ export default function DashboardPage() {
           <div className="hero-panel__eyebrow">Operations Overview</div>
           <h1 className="dash-title">Dashboard</h1>
           <p className="dash-subtitle">
-            Monitor sales, order fulfillment, and inventory health from one view.
+            Monitor sales, order fulfillment, and inventory health from one
+            view.
           </p>
 
           <div className="hero-period-row">
@@ -505,7 +515,7 @@ export default function DashboardPage() {
             onClick={handleRefresh}
             disabled={refreshing}
           >
-            {refreshing ? 'Refreshing...' : 'Refresh'}
+            {refreshing ? "Refreshing..." : "Refresh"}
           </button>
         </div>
       </section>
@@ -517,7 +527,7 @@ export default function DashboardPage() {
           {PRESETS.map((item) => (
             <button
               key={item.key}
-              className={`dash-pill ${preset === item.key ? 'active' : ''}`}
+              className={`dash-pill ${preset === item.key ? "active" : ""}`}
               onClick={() => handlePresetChange(item.key)}
               type="button"
             >
@@ -526,7 +536,7 @@ export default function DashboardPage() {
           ))}
         </div>
 
-        {preset === 'custom' && (
+        {preset === "custom" && (
           <div className="dash-custom-row">
             <div className="dash-field">
               <label htmlFor="dash-from">From</label>
@@ -560,7 +570,9 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {rangeError ? <div className="dash-inline-error">{rangeError}</div> : null}
+        {rangeError ? (
+          <div className="dash-inline-error">{rangeError}</div>
+        ) : null}
       </section>
 
       {fetchError ? (
@@ -669,7 +681,9 @@ export default function DashboardPage() {
             <div className="fulfillment-summary__side">
               <span>Completion Rate</span>
               <strong>
-                {totalOrders ? `${Math.round((completedOrders / totalOrders) * 100)}%` : '0%'}
+                {totalOrders
+                  ? `${Math.round((completedOrders / totalOrders) * 100)}%`
+                  : "0%"}
               </strong>
             </div>
           </div>
@@ -755,7 +769,7 @@ export default function DashboardPage() {
                     )} finished products and ${num.format(
                       Number(inventory.raw_out_of_stock || 0),
                     )} raw materials are already out of stock.`
-                  : 'No out-of-stock items detected in the current inventory snapshot.'}
+                  : "No out-of-stock items detected in the current inventory snapshot."}
               </div>
             </div>
           </div>
@@ -826,7 +840,7 @@ export default function DashboardPage() {
                 {recentOrders.map((order) => (
                   <tr key={order.id}>
                     <td className="dash-strong">#{order.id}</td>
-                    <td>{order.customer_name || 'Walk-in'}</td>
+                    <td>{order.customer_name || "Walk-in"}</td>
                     <td>
                       <ChannelBadge channel={order.channel} />
                     </td>

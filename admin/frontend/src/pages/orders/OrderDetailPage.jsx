@@ -1,32 +1,288 @@
-// src/pages/orders/OrderDetailPage.jsx – Full Order Detail View (Admin)
-import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import api from '../../services/api';
-import toast from 'react-hot-toast';
+// src/pages/orders/OrderDetailPage.jsx – compact polished detail view (Admin)
+import React, { useEffect, useState } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import api from "../../services/api";
+import toast from "react-hot-toast";
 
 const STATUS_STYLE = {
-  pending:    { bg: '#fef9c3', color: '#854d0e' },
-  confirmed:  { bg: '#dbeafe', color: '#1e40af' },
-  processing: { bg: '#e9d5ff', color: '#6b21a8' },
-  shipped:    { bg: '#e0f2fe', color: '#075985' },
-  delivered:  { bg: '#dcfce7', color: '#166534' },
-  completed:  { bg: '#d1fae5', color: '#065f46' },
-  cancelled:  { bg: '#fee2e2', color: '#991b1b' },
+  pending: { bg: "#fef3c7", color: "#a16207" },
+  confirmed: { bg: "#dbeafe", color: "#1d4ed8" },
+  contract_released: { bg: "#ede9fe", color: "#6d28d9" },
+  production: { bg: "#f3e8ff", color: "#7e22ce" },
+  shipping: { bg: "#e0f2fe", color: "#0369a1" },
+  delivered: { bg: "#dcfce7", color: "#15803d" },
+  completed: { bg: "#dcfce7", color: "#166534" },
+  cancelled: { bg: "#fee2e2", color: "#dc2626" },
 };
 
-const ORDER_STATUSES = ['pending','confirmed','processing','shipped','delivered','completed','cancelled'];
+const STATUS_LABELS = {
+  pending: "Pending",
+  confirmed: "Confirmed",
+  contract_released: "Contract Released",
+  production: "Production",
+  shipping: "Shipping",
+  delivered: "Delivered",
+  completed: "Completed",
+  cancelled: "Cancelled",
+};
+
+const STANDARD_TIMELINE = [
+  "pending",
+  "confirmed",
+  "production",
+  "shipping",
+  "delivered",
+  "completed",
+];
+
+const BLUEPRINT_TIMELINE = [
+  "pending",
+  "confirmed",
+  "contract_released",
+  "production",
+  "shipping",
+  "delivered",
+  "completed",
+];
+
+const WALKIN_TIMELINE = ["pending", "confirmed", "production", "completed"];
+
+const WALKIN_BLUEPRINT_TIMELINE = [
+  "pending",
+  "confirmed",
+  "contract_released",
+  "production",
+  "completed",
+];
+
+const DETAIL_TABS = [
+  { key: "overview", label: "Overview" },
+  { key: "payment", label: "Payment" },
+  { key: "fulfillment", label: "Fulfillment" },
+  { key: "blueprint", label: "Blueprint" },
+];
+
+const STATUS_TRANSITIONS = {
+  pending: ["confirmed", "cancelled"],
+  confirmed: ["contract_released", "production", "cancelled"],
+  contract_released: ["production", "cancelled"],
+  production: ["shipping", "cancelled"],
+  shipping: ["delivered", "completed"],
+  delivered: ["completed"],
+  completed: [],
+  cancelled: [],
+};
+
+const PAYMENT_STYLE = {
+  unpaid: { bg: "#fef2f2", color: "#dc2626" },
+  paid: { bg: "#ecfdf5", color: "#15803d" },
+  partial: { bg: "#fef3c7", color: "#b45309" },
+  pending: { bg: "#fef3c7", color: "#a16207" },
+  verified: { bg: "#ecfdf5", color: "#15803d" },
+  rejected: { bg: "#fee2e2", color: "#dc2626" },
+};
+
+const TASK_STYLE = {
+  pending: { bg: "#fef3c7", color: "#a16207" },
+  in_progress: { bg: "#dbeafe", color: "#1d4ed8" },
+  completed: { bg: "#dcfce7", color: "#166534" },
+};
+
+const normalize = (value) => String(value || "").toLowerCase();
+
+const titleCase = (value) => {
+  const str = String(value || "").replace(/_/g, " ");
+  return str ? str.charAt(0).toUpperCase() + str.slice(1) : "—";
+};
+
+const formatMoney = (value) =>
+  `₱ ${Number(value || 0).toLocaleString("en-PH", {
+    minimumFractionDigits: 2,
+  })}`;
+
+const formatDateTime = (value) => {
+  if (!value) return "—";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString("en-PH");
+};
+
+const formatDate = (value) => {
+  if (!value) return "—";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? "—"
+    : date.toLocaleDateString("en-PH", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      });
+};
+
+const getStatusLabel = (status) =>
+  STATUS_LABELS[normalize(status)] || titleCase(status);
+
+const getChannelMeta = (channel) => {
+  const key = normalize(channel);
+  return key === "online"
+    ? { label: "Online", bg: "#eff6ff", color: "#2563eb" }
+    : { label: "Walk-in", bg: "#ecfdf5", color: "#15803d" };
+};
+
+const getTone = (
+  styleMap,
+  key,
+  fallback = { bg: "#f8fafc", color: "#475569" },
+) => styleMap[normalize(key)] || fallback;
+
+const getTimelineStepState = (steps, currentStatus, stepKey) => {
+  const currentIndex = steps.indexOf(currentStatus);
+  const stepIndex = steps.indexOf(stepKey);
+
+  if (currentIndex === -1) {
+    return stepIndex === 0 ? "current" : "upcoming";
+  }
+
+  if (stepIndex < currentIndex) return "done";
+  if (stepIndex === currentIndex) return "current";
+  return "upcoming";
+};
+
+const getTimelineNote = (
+  step,
+  {
+    order,
+    blueprintTasks,
+    hasBlueprintTasks,
+    completedBlueprintTasks,
+    hasSignedDeliveryReceipt,
+  },
+) => {
+  switch (step) {
+    case "pending":
+      return order?.created_at
+        ? `Created ${formatDate(order.created_at)}`
+        : "Awaiting review";
+
+    case "confirmed":
+      return normalize(
+        order?.payment_status_display || order?.payment_status,
+      ) === "paid"
+        ? "Payment settled"
+        : titleCase(
+            order?.payment_status_display || order?.payment_status || "unpaid",
+          );
+
+    case "contract_released":
+      return order?.contract ? "Contract available" : "Waiting for contract";
+
+    case "production":
+      if (hasBlueprintTasks) {
+        return `${completedBlueprintTasks.length}/${blueprintTasks.length} blueprint task${
+          blueprintTasks.length === 1 ? "" : "s"
+        } completed`;
+      }
+      return "Ready for production";
+
+    case "shipping":
+      if (order?.delivery?.scheduled_date) {
+        return `Scheduled ${formatDate(order.delivery.scheduled_date)}`;
+      }
+      return order?.delivery
+        ? "Delivery prepared"
+        : "Awaiting delivery schedule";
+
+    case "delivered":
+      return hasSignedDeliveryReceipt
+        ? "Signed receipt uploaded"
+        : order?.delivery
+          ? "Awaiting signed receipt"
+          : "Not yet delivered";
+
+    case "completed":
+      return normalize(
+        order?.payment_status_display || order?.payment_status,
+      ) === "paid"
+        ? "Transaction closed"
+        : "Order finalized";
+    default:
+      return "";
+  }
+};
+
+const getProofType = (url) => {
+  const cleanUrl = String(url || "")
+    .split("?")[0]
+    .toLowerCase();
+
+  if (/\.(jpg|jpeg|png|gif|webp|bmp|svg)$/.test(cleanUrl)) return "image";
+  if (/\.pdf$/.test(cleanUrl)) return "pdf";
+  return "other";
+};
+
+const getApiOrigin = () => {
+  const rawBaseUrl = String(api?.defaults?.baseURL || "").trim();
+
+  if (/^https?:\/\//i.test(rawBaseUrl)) {
+    try {
+      const parsed = new URL(rawBaseUrl);
+      return `${parsed.protocol}//${parsed.host}`;
+    } catch {
+      // ignore and continue
+    }
+  }
+
+  const host = window.location.hostname || "localhost";
+  return `${window.location.protocol}//${host}:5001`;
+};
+
+const normalizeAssetUrl = (value) => {
+  if (!value) return "";
+
+  const raw = String(value).trim();
+
+  if (/^https?:\/\//i.test(raw)) return raw;
+
+  const cleaned = raw.replace(/\\/g, "/").replace(/^\.?\//, "/");
+  return `${getApiOrigin()}${cleaned.startsWith("/") ? cleaned : `/${cleaned}`}`;
+};
 
 export default function OrderDetailPage() {
-  const { id }     = useParams();
-  const navigate   = useNavigate();
-  const [order,    setOrder]    = useState(null);
-  const [loading,  setLoading]  = useState(true);
+  const { id } = useParams();
+  const navigate = useNavigate();
 
-  // UI state
-  const [statusModal,   setStatusModal]   = useState(false);
-  const [newStatus,     setNewStatus]     = useState('');
-  const [receiptFile,   setReceiptFile]   = useState(null);
-  const [uploading,     setUploading]     = useState(false);
+  const [order, setOrder] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  const [statusModal, setStatusModal] = useState(false);
+  const [newStatus, setNewStatus] = useState("");
+  const [receiptFile, setReceiptFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
+
+  const [proofPreview, setProofPreview] = useState({
+    open: false,
+    url: "",
+    type: "other",
+  });
+
+  const [deliveryReceiptPreview, setDeliveryReceiptPreview] = useState({
+    open: false,
+    url: "",
+    type: "other",
+  });
+  const [activeTab, setActiveTab] = useState("overview");
+
+  const [assignModal, setAssignModal] = useState(false);
+  const [assignableStaff, setAssignableStaff] = useState([]);
+  const [loadingAssignable, setLoadingAssignable] = useState(false);
+  const [assigning, setAssigning] = useState(false);
+  const [updatingTaskId, setUpdatingTaskId] = useState(null);
+  const [assignmentBlueprintId, setAssignmentBlueprintId] = useState(null);
+  const [assignForm, setAssignForm] = useState({
+    staff_id: "",
+    task_role: "Cabinet Maker",
+    due_date: "",
+    note: "",
+  });
 
   const load = async () => {
     setLoading(true);
@@ -34,253 +290,1737 @@ export default function OrderDetailPage() {
       const { data } = await api.get(`/orders/${id}`);
       setOrder(data);
       setNewStatus(data.status);
+    } catch (err) {
+      toast.error(
+        err?.response?.data?.message || "Failed to load order details.",
+      );
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { load(); }, [id]); // eslint-disable-line
+  useEffect(() => {
+    load();
+  }, [id]); // eslint-disable-line
 
   const handleStatusUpdate = async () => {
+    const nextStatus = normalize(newStatus);
+
+    if (!nextStatus || nextStatus === currentOrderStatus) {
+      toast.error("Select a valid next status first.");
+      return;
+    }
+
+    const blueprintTasks = Array.isArray(order?.blueprint_tasks)
+      ? order.blueprint_tasks
+      : [];
+
+    const hasBlueprintTasks = blueprintTasks.length > 0;
+
+    const hasIncompleteBlueprintTasks = blueprintTasks.some((task) =>
+      ["pending", "in_progress"].includes(normalize(task?.status)),
+    );
+
+    if (
+      hasBlueprintTasks &&
+      hasIncompleteBlueprintTasks &&
+      ["shipping", "delivered", "completed"].includes(nextStatus)
+    ) {
+      toast.error(
+        "Complete all blueprint tasks first before moving this order to shipping, delivered, or completed.",
+      );
+      return;
+    }
+    if (
+      !isWalkInOrder &&
+      !isBlueprintOrder &&
+      ["shipping", "delivered"].includes(nextStatus) &&
+      paymentBalance > 0
+    ) {
+      toast.error(
+        "Standard product orders must be fully paid before moving to shipping or delivered.",
+      );
+      return;
+    }
+
+    if (
+      isBlueprintOrder &&
+      nextStatus === "production" &&
+      !hasRequiredBlueprintDownPayment
+    ) {
+      toast.error(
+        "Blueprint orders require at least a 30% verified down payment before moving to production.",
+      );
+      return;
+    }
+
     try {
       await api.patch(`/orders/${id}/status`, { status: newStatus });
-      toast.success(`Status updated to "${newStatus}".`);
+      toast.success(`Status updated to "${titleCase(newStatus)}".`);
       setStatusModal(false);
       load();
-    } catch {}
+    } catch (err) {
+      toast.error(
+        err?.response?.data?.message || "Failed to update order status.",
+      );
+    }
   };
 
-  const handleAccept  = async () => { await api.post(`/orders/${id}/accept`);  toast.success('Order accepted.');  load(); };
+  const handleAccept = async () => {
+    try {
+      await api.post(`/orders/${id}/accept`);
+      toast.success("Order accepted.");
+      load();
+    } catch (err) {
+      toast.error(err?.response?.data?.message || "Failed to accept order.");
+    }
+  };
+
   const handleDecline = async () => {
-    const reason = window.prompt('Enter reason for declining:');
+    const reason = window.prompt("Enter reason for declining:");
     if (reason === null) return;
-    await api.post(`/orders/${id}/decline`, { reason });
-    toast.success('Order declined.');
-    load();
+
+    try {
+      await api.post(`/orders/${id}/decline`, { reason });
+      toast.success("Order declined.");
+      load();
+    } catch (err) {
+      toast.error(err?.response?.data?.message || "Failed to decline order.");
+    }
   };
 
   const verifyPayment = async (paymentId, action) => {
     try {
-      await api.post(`/orders/${id}/verify-payment`, { payment_id: paymentId, action });
-      toast.success(`Payment ${action}.`);
+      const { data } = await api.post(`/orders/${id}/verify-payment`, {
+        payment_id: paymentId,
+        action,
+      });
+      toast.success(data?.message || `Payment ${action}.`);
       load();
-    } catch {}
+    } catch (err) {
+      toast.error(
+        err?.response?.data?.message || `Failed to mark payment as ${action}.`,
+      );
+    }
+  };
+
+  const openProofPreview = (url) => {
+    const resolvedUrl = normalizeAssetUrl(url);
+
+    setProofPreview({
+      open: true,
+      url: resolvedUrl,
+      type: getProofType(resolvedUrl),
+    });
+  };
+
+  const closeProofPreview = () => {
+    setProofPreview({
+      open: false,
+      url: "",
+      type: "other",
+    });
+  };
+
+  const openDeliveryReceiptPreview = (url) => {
+    const resolvedUrl = normalizeAssetUrl(url);
+
+    setDeliveryReceiptPreview({
+      open: true,
+      url: resolvedUrl,
+      type: getProofType(resolvedUrl),
+    });
+  };
+
+  const closeDeliveryReceiptPreview = () => {
+    setDeliveryReceiptPreview({
+      open: false,
+      url: "",
+      type: "other",
+    });
   };
 
   const uploadDeliveryReceipt = async () => {
-    if (!receiptFile) { toast.error('Please select a file.'); return; }
+    if (!receiptFile) {
+      toast.error("Please select a signed receipt file first.");
+      return;
+    }
+
+    const isImage = String(receiptFile.type || "").startsWith("image/");
+    const isPdf = receiptFile.type === "application/pdf";
+
+    if (!isImage && !isPdf) {
+      toast.error("Only image or PDF files are allowed.");
+      return;
+    }
+
+    const maxFileSize = 5 * 1024 * 1024; // 5 MB
+    if (receiptFile.size > maxFileSize) {
+      toast.error("File is too large. Maximum allowed size is 5 MB.");
+      return;
+    }
+
     setUploading(true);
     try {
       const fd = new FormData();
-      fd.append('receipt', receiptFile);
+      fd.append("receipt", receiptFile);
+
       await api.post(`/orders/${id}/delivery-receipt`, fd, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+        headers: { "Content-Type": "multipart/form-data" },
       });
-      toast.success('Delivery receipt uploaded. Order marked as completed.');
+
+      toast.success("Signed delivery receipt uploaded successfully.");
       setReceiptFile(null);
       load();
+    } catch (err) {
+      toast.error(
+        err?.response?.data?.message || "Failed to upload delivery receipt.",
+      );
     } finally {
       setUploading(false);
     }
   };
 
-  if (loading) return <div style={center}>Loading order...</div>;
-  if (!order)  return <div style={center}>Order not found.</div>;
+  const blueprintId =
+    order?.contract?.blueprint_id || order?.blueprint_id || null;
 
-  const ss = STATUS_STYLE[order.status] || { bg: '#f1f5f9', color: '#475569' };
+  const canAssignBlueprintStaff =
+    Boolean(blueprintId) &&
+    ["contract_released", "production"].includes(normalize(order?.status));
+
+  const openAssignModal = async () => {
+    if (!blueprintId) {
+      toast.error("This order is not linked to a blueprint.");
+      return;
+    }
+
+    if (!canAssignBlueprintStaff) {
+      toast.error(
+        "Staff assignment is only available after contract release or during production.",
+      );
+      return;
+    }
+
+    setLoadingAssignable(true);
+    try {
+      const { data } = await api.get(`/orders/${id}/assignable-staff`);
+      setAssignableStaff(Array.isArray(data?.staff) ? data.staff : []);
+      setAssignmentBlueprintId(data?.blueprint_id || blueprintId);
+      setAssignForm({
+        staff_id: "",
+        task_role: "Cabinet Maker",
+        due_date: "",
+        note: "",
+      });
+      setAssignModal(true);
+    } catch (err) {
+      toast.error(
+        err?.response?.data?.message || "Failed to load assignable staff.",
+      );
+    } finally {
+      setLoadingAssignable(false);
+    }
+  };
+
+  const handleAssignStaff = async () => {
+    if (!assignForm.staff_id) {
+      toast.error("Please select a staff member.");
+      return;
+    }
+
+    if (!assignForm.task_role.trim()) {
+      toast.error("Task role is required.");
+      return;
+    }
+
+    if (!assignForm.due_date) {
+      toast.error("Due date is required.");
+      return;
+    }
+
+    const parsedDueDate = new Date(assignForm.due_date);
+    if (Number.isNaN(parsedDueDate.getTime())) {
+      toast.error("Due date is invalid.");
+      return;
+    }
+
+    if (parsedDueDate.getTime() < Date.now() - 60000) {
+      toast.error("Due date cannot be in the past.");
+      return;
+    }
+
+    setAssigning(true);
+    try {
+      const payload = {
+        staff_id: Number(assignForm.staff_id),
+        task_role: assignForm.task_role.trim(),
+        due_date: `${assignForm.due_date.replace("T", " ")}:00`,
+        note: assignForm.note.trim(),
+      };
+
+      await api.patch(`/orders/${id}/assign-staff`, payload);
+      toast.success("Staff assigned to blueprint successfully.");
+      setAssignModal(false);
+      load();
+    } catch (err) {
+      toast.error(err?.response?.data?.message || "Failed to assign staff.");
+    } finally {
+      setAssigning(false);
+    }
+  };
+
+  const handleTaskStatusUpdate = async (taskId, nextStatus) => {
+    setUpdatingTaskId(taskId);
+
+    try {
+      const { data } = await api.patch(`/orders/${id}/tasks/${taskId}/status`, {
+        status: nextStatus,
+      });
+
+      toast.success(
+        data?.message || `Task marked as "${titleCase(nextStatus)}".`,
+      );
+      load();
+    } catch (err) {
+      toast.error(
+        err?.response?.data?.message || "Failed to update task status.",
+      );
+    } finally {
+      setUpdatingTaskId(null);
+    }
+  };
+
+  if (loading) return <div style={center}>Loading order...</div>;
+  if (!order) return <div style={center}>Order not found.</div>;
+
+  const normalizedOrderStatus = normalize(order?.status);
+  const statusTone = getTone(STATUS_STYLE, normalizedOrderStatus);
+  const channelMeta = getChannelMeta(order?.channel || order?.type);
+  const normalizedPaymentStatus = normalize(
+    order?.payment_status_display || order?.payment_status || "unpaid",
+  );
+  const normalizedPaymentMethod = normalize(order?.payment_method);
+  const isCashLikePaymentMethod = ["cash", "cod", "cop"].includes(
+    normalizedPaymentMethod,
+  );
+  const orderPaymentTone = getTone(PAYMENT_STYLE, normalizedPaymentStatus);
+
+  const blueprintTasks = Array.isArray(order?.blueprint_tasks)
+    ? order.blueprint_tasks
+    : [];
+
+  const activeBlueprintTasks = blueprintTasks.filter((task) =>
+    ["pending", "in_progress"].includes(normalize(task?.status)),
+  );
+
+  const completedBlueprintTasks = blueprintTasks.filter(
+    (task) => normalize(task?.status) === "completed",
+  );
+
+  const hasBlueprintTasks = blueprintTasks.length > 0;
+  const allBlueprintTasksCompleted =
+    hasBlueprintTasks &&
+    completedBlueprintTasks.length === blueprintTasks.length;
+
+  const isDeliveryPhaseOrDone = [
+    "shipping",
+    "delivered",
+    "completed",
+    "cancelled",
+  ].includes(normalizedOrderStatus);
+
+  const currentOrderStatus = normalizedOrderStatus;
+  const currentChannel = normalize(order?.channel || order?.type);
+  const isWalkInOrder =
+    currentChannel === "walkin" || currentChannel === "walk-in";
+
+  const isOnlineOrder = currentChannel === "online";
+  const hasPaymentRecords =
+    Array.isArray(order?.payments) && order.payments.length > 0;
+  const hasPendingPaymentActions =
+    hasPaymentRecords &&
+    order.payments.some((payment) => normalize(payment?.status) === "pending");
+  const verifiedPaymentTotal = Number(order?.payment_verified_total || 0);
+  const paymentBalance = Number(order?.payment_balance || 0);
+  const hasContractTerms = Boolean(
+    String(order?.contract?.materials_used || "").trim(),
+  );
+  const totalAmount = Number(order?.total_amount || order?.total || 0);
+  const requiredBlueprintDownPayment = Number((totalAmount * 0.3).toFixed(2));
+  const hasBlueprintFlow = Boolean(
+    blueprintId || order?.contract || hasBlueprintTasks,
+  );
+
+  const isBlueprintOrder =
+    normalize(order?.order_type) === "blueprint" ||
+    Boolean(blueprintId || order?.contract);
+
+  const needsContractFirst =
+    isBlueprintOrder &&
+    normalizedOrderStatus === "confirmed" &&
+    !order?.contract;
+  const hasRequiredBlueprintDownPayment =
+    normalizedPaymentStatus === "paid" ||
+    verifiedPaymentTotal >= Math.max(0, requiredBlueprintDownPayment - 0.01);
+
+  const standardNeedsFullPaymentBeforeFulfillment =
+    !isWalkInOrder && !isBlueprintOrder && paymentBalance > 0;
+
+  const blueprintNeedsDownPaymentBeforeProduction =
+    isBlueprintOrder &&
+    ["confirmed", "contract_released"].includes(normalizedOrderStatus) &&
+    !hasRequiredBlueprintDownPayment;
+  const effectiveStatusTransitions = isWalkInOrder
+    ? {
+        pending: ["confirmed", "cancelled"],
+        confirmed: isBlueprintOrder
+          ? ["cancelled"]
+          : ["production", "cancelled"],
+        contract_released: ["production", "cancelled"],
+        production: ["completed", "cancelled"],
+        shipping: ["completed"],
+        delivered: ["completed"],
+        completed: [],
+        cancelled: [],
+      }
+    : {
+        pending: ["confirmed", "cancelled"],
+        confirmed: isBlueprintOrder
+          ? ["cancelled"]
+          : ["production", "cancelled"],
+        contract_released: ["production", "cancelled"],
+        production: ["shipping", "cancelled"],
+        shipping: ["delivered", "completed"],
+        delivered: ["completed"],
+        completed: [],
+        cancelled: [],
+      };
+
+  const allowedNextStatuses =
+    effectiveStatusTransitions[currentOrderStatus] || [];
+  const hasSignedDeliveryReceipt = Boolean(order?.delivery?.signed_receipt);
+  const selectableNextStatuses = allowedNextStatuses.filter((status) => {
+    const normalizedStatus = normalize(status);
+
+    const blockedByIncompleteTasks =
+      hasBlueprintTasks &&
+      !allBlueprintTasksCompleted &&
+      ["shipping", "delivered", "completed"].includes(normalizedStatus);
+
+    const blockedByMissingReceipt =
+      !isWalkInOrder &&
+      normalizedStatus === "completed" &&
+      (!order?.delivery || !hasSignedDeliveryReceipt);
+
+    const blockedByUnsettledPayment =
+      normalizedStatus === "completed" && paymentBalance > 0;
+
+    const blockedByStandardFullPayment =
+      !isWalkInOrder &&
+      !isBlueprintOrder &&
+      ["shipping", "delivered"].includes(normalizedStatus) &&
+      paymentBalance > 0;
+
+    const blockedByBlueprintDownPayment =
+      isBlueprintOrder &&
+      normalizedStatus === "production" &&
+      !hasRequiredBlueprintDownPayment;
+
+    return !(
+      blockedByIncompleteTasks ||
+      blockedByMissingReceipt ||
+      blockedByUnsettledPayment ||
+      blockedByStandardFullPayment ||
+      blockedByBlueprintDownPayment
+    );
+  });
+
+  const shouldShowMissingDeliverySection =
+    !isWalkInOrder &&
+    !order?.delivery &&
+    ["shipping", "delivered", "completed"].includes(normalizedOrderStatus);
+
+  const shouldShowStatusButton =
+    currentOrderStatus !== "pending" &&
+    selectableNextStatuses.length > 0 &&
+    !needsContractFirst;
+  const shouldShowFulfillmentTab = Boolean(
+    order?.delivery ||
+    order?.contract ||
+    shouldShowMissingDeliverySection ||
+    ["production", "shipping", "delivered", "completed"].includes(
+      normalizedOrderStatus,
+    ),
+  );
+
+  const nextStepLabel =
+    normalizedOrderStatus === "pending"
+      ? "Review & accept"
+      : normalizedOrderStatus === "confirmed"
+        ? isBlueprintOrder
+          ? "Generate contract first"
+          : "Move to production"
+        : normalizedOrderStatus === "contract_released"
+          ? "Move to production"
+          : normalizedOrderStatus === "production"
+            ? isWalkInOrder
+              ? "Complete order when finished"
+              : "Prepare shipping or delivery"
+            : normalizedOrderStatus === "shipping"
+              ? "Mark delivered after handoff"
+              : normalizedOrderStatus === "delivered"
+                ? "Upload signed receipt and complete"
+                : normalizedOrderStatus === "completed"
+                  ? "Order closed"
+                  : normalizedOrderStatus === "cancelled"
+                    ? "Order closed"
+                    : "Review order";
+
+  const timelineSteps = hasBlueprintFlow
+    ? isWalkInOrder && !order?.delivery
+      ? WALKIN_BLUEPRINT_TIMELINE
+      : BLUEPRINT_TIMELINE
+    : isWalkInOrder
+      ? WALKIN_TIMELINE
+      : STANDARD_TIMELINE;
+
+  const timelineCurrentKey =
+    normalizedOrderStatus === "cancelled"
+      ? order?.delivery
+        ? "shipping"
+        : hasBlueprintTasks
+          ? "production"
+          : normalizedPaymentStatus === "paid"
+            ? "confirmed"
+            : "pending"
+      : currentOrderStatus;
+
+  const assignmentPhaseText =
+    normalizedOrderStatus === "shipping"
+      ? "Ready for delivery / dispatched"
+      : normalizedOrderStatus === "delivered"
+        ? "Delivered, awaiting final completion"
+        : normalizedOrderStatus === "completed"
+          ? "Order completed"
+          : normalizedOrderStatus === "cancelled"
+            ? "Order cancelled"
+            : allBlueprintTasksCompleted
+              ? "Production tasks completed"
+              : canAssignBlueprintStaff
+                ? activeBlueprintTasks.length > 0
+                  ? "Assignment already in progress"
+                  : hasBlueprintTasks
+                    ? "Assignment history available"
+                    : "Ready for staff assignment"
+                : "Waiting for contract release / production stage";
+
+  const summaryCards = [
+    {
+      label: "Current Status",
+      value: getStatusLabel(order?.status),
+      tone: statusTone,
+    },
+    {
+      label: "Payment Status",
+      value: titleCase(
+        order?.payment_status_display || order?.payment_status || "unpaid",
+      ),
+      tone: orderPaymentTone,
+    },
+    {
+      label: "Total Amount",
+      value: formatMoney(order?.total_amount),
+      tone: { bg: "#eff6ff", color: "#1d4ed8" },
+    },
+    hasBlueprintFlow
+      ? {
+          label: "Blueprint Tasks",
+          value: hasBlueprintTasks
+            ? `${completedBlueprintTasks.length}/${blueprintTasks.length}`
+            : "Ready",
+          tone: { bg: "#f8fafc", color: "#475569" },
+        }
+      : {
+          label: "Next Step",
+          value: nextStepLabel,
+          tone: { bg: "#f8fafc", color: "#475569" },
+        },
+  ];
+
+  const visibleTabs = DETAIL_TABS.filter((tab) => {
+    if (tab.key === "blueprint")
+      return Boolean(blueprintId || order.contract || hasBlueprintTasks);
+    if (tab.key === "fulfillment") return shouldShowFulfillmentTab;
+    if (tab.key === "payment")
+      return Boolean(
+        hasPaymentRecords || normalizedPaymentStatus || isOnlineOrder,
+      );
+    return true;
+  });
 
   return (
-    <div style={{ maxWidth: 960, margin: '0 auto' }}>
-      {/* ── Top bar ─────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
-        <button onClick={() => navigate('/orders')} style={btnBack}>← Orders</button>
-        <h1 style={{ fontSize: 20, fontWeight: 700, color: '#1e2a38', margin: 0 }}>
-          Order #{String(order.id).padStart(5, '0')}
-        </h1>
-        <span style={{ background: ss.bg, color: ss.color, padding: '4px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700 }}>
-          {order.status}
-        </span>
-        <span style={{
-          background: order.channel === 'online' ? '#dbeafe' : '#dcfce7',
-          color:      order.channel === 'online' ? '#1e40af' : '#166534',
-          padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 600,
-        }}>
-          {order.channel === 'online' ? '🌐 Online' : '🏪 Walk-in'}
-        </span>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-          {order.status === 'pending' && (
-            <>
-              <button onClick={handleAccept}  style={btnAccept}>✓ Accept</button>
-              <button onClick={handleDecline} style={btnDecline}>✕ Decline</button>
-            </>
-          )}
-          <button onClick={() => setStatusModal(true)} style={btnPrimary}>Update Status</button>
+    <div style={pageShell}>
+      <div style={heroCard}>
+        <div style={heroTop}>
+          <div style={{ flex: 1, minWidth: 280 }}>
+            <div style={eyebrow}>Sales & Orders</div>
+
+            <div style={heroTitleRow}>
+              <button onClick={() => navigate("/orders")} style={btnBack}>
+                ← Orders
+              </button>
+
+              <h1 style={pageTitle}>
+                Order #{String(order.id).padStart(5, "0")}
+              </h1>
+
+              <span
+                style={{
+                  ...pill,
+                  background: statusTone.bg,
+                  color: statusTone.color,
+                }}
+              >
+                {getStatusLabel(order.status)}
+              </span>
+
+              <span
+                style={{
+                  ...pill,
+                  background: channelMeta.bg,
+                  color: channelMeta.color,
+                }}
+              >
+                {channelMeta.label}
+              </span>
+            </div>
+
+            <p style={pageSubtitle}>
+              Review payment progress, contract status, delivery details, and
+              blueprint task handoff for this order.
+            </p>
+          </div>
+
+          <div style={heroActions}>
+            {order.status === "pending" && (
+              <>
+                <button onClick={handleAccept} style={btnAccept}>
+                  Accept
+                </button>
+                <button onClick={handleDecline} style={btnDecline}>
+                  Decline
+                </button>
+              </>
+            )}
+            {needsContractFirst && (
+              <button
+                onClick={() => navigate("/contracts")}
+                style={{
+                  ...btnPrimary,
+                  background: "#7c3aed",
+                  borderColor: "#7c3aed",
+                }}
+              >
+                Generate Contract
+              </button>
+            )}
+
+            {shouldShowStatusButton && (
+              <button
+                onClick={() => {
+                  setNewStatus(selectableNextStatuses[0] || currentOrderStatus);
+                  setStatusModal(true);
+                }}
+                style={btnPrimary}
+              >
+                Update Status
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div style={statsGrid}>
+          {summaryCards.map((card) => (
+            <div key={card.label} style={statCard}>
+              <div style={statTop}>
+                <div style={statLabel}>{card.label}</div>
+                <span
+                  style={{
+                    ...toneDot,
+                    background: card.tone.color,
+                    boxShadow: `0 0 0 4px ${card.tone.bg}`,
+                  }}
+                />
+              </div>
+              <div style={statValue}>{card.value}</div>
+            </div>
+          ))}
+        </div>
+        {standardNeedsFullPaymentBeforeFulfillment && (
+          <div style={{ ...alertWarning, marginTop: 10 }}>
+            Standard delivery orders require full payment before they can move
+            to shipping or delivered.
+          </div>
+        )}
+
+        {blueprintNeedsDownPaymentBeforeProduction && (
+          <div style={{ ...alertWarning, marginTop: 10 }}>
+            Blueprint orders require at least a 30% verified down payment before
+            they can move to production.
+          </div>
+        )}
+
+        <div style={detailTabRow}>
+          {visibleTabs.map((tab) => {
+            const isActive = activeTab === tab.key;
+
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setActiveTab(tab.key)}
+                style={{
+                  ...detailTabButton,
+                  background: isActive ? "#0f172a" : "#ffffff",
+                  color: isActive ? "#ffffff" : "#475569",
+                  borderColor: isActive ? "#0f172a" : "#e2e8f0",
+                }}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
         </div>
       </div>
+      {activeTab === "overview" && (
+        <>
+          <Section title="Order Progress">
+            {normalizedOrderStatus === "cancelled" && (
+              <div style={timelineCancelNotice}>
+                This order has been cancelled. Progress stopped before
+                completion.
+              </div>
+            )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-        {/* ── Customer Info ──────────────────────────────────────── */}
-        <Section title="👤 Customer Information">
-          <InfoRow label="Name"    value={order.customer_name} />
-          <InfoRow label="Email"   value={order.customer_email} />
-          <InfoRow label="Phone"   value={order.customer_phone} />
-          <InfoRow label="Address" value={order.customer_address || '—'} />
-        </Section>
+            <div style={timelineScroller}>
+              <div
+                style={{
+                  ...timelineRail,
+                  gridTemplateColumns: `repeat(${timelineSteps.length}, minmax(0, 1fr))`,
+                }}
+              >
+                {timelineSteps.map((step, index) => {
+                  const stepState = getTimelineStepState(
+                    timelineSteps,
+                    timelineCurrentKey,
+                    step,
+                  );
 
-        {/* ── Order Summary ──────────────────────────────────────── */}
-        <Section title="📋 Order Summary">
-          <InfoRow label="Date Placed"    value={new Date(order.created_at).toLocaleString('en-PH')} />
-          <InfoRow label="Payment Method" value={order.payment_method?.replace('_', ' ') || '—'} />
-          <InfoRow label="Payment Status" value={order.payment_status?.replace('_', ' ') || 'unpaid'} />
-          <InfoRow label="Total Amount"   value={`₱ ${Number(order.total_amount).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`} bold />
-        </Section>
-      </div>
+                  const stepTone = getTone(STATUS_STYLE, step);
+                  const note =
+                    stepState === "upcoming"
+                      ? ""
+                      : getTimelineNote(step, {
+                          order,
+                          blueprintTasks,
+                          hasBlueprintTasks,
+                          completedBlueprintTasks,
+                          hasSignedDeliveryReceipt,
+                        });
 
-      {/* ── Order Items ─────────────────────────────────────────── */}
-      <Section title="📦 Order Items">
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-          <thead>
-            <tr style={{ background: '#f8fafc' }}>
-              {['Product','Qty','Unit Price','Production Cost','Subtotal'].map(h => (
-                <th key={h} style={th}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {(order.items || []).map((item, i) => (
-              <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                <td style={td}>{item.product_name}</td>
-                <td style={td}>{item.quantity}</td>
-                <td style={td}>₱ {Number(item.unit_price).toFixed(2)}</td>
-                <td style={td}>₱ {Number(item.production_cost).toFixed(2)}</td>
-                <td style={{ ...td, fontWeight: 600 }}>₱ {Number(item.subtotal).toFixed(2)}</td>
-              </tr>
-            ))}
-          </tbody>
-          <tfoot>
-            <tr style={{ background: '#f8fafc', borderTop: '2px solid #e2e8f0' }}>
-              <td colSpan={4} style={{ ...td, textAlign: 'right', fontWeight: 700 }}>Total</td>
-              <td style={{ ...td, fontWeight: 700, color: '#1e40af', fontSize: 15 }}>
-                ₱ {Number(order.total_amount).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
-              </td>
-            </tr>
-          </tfoot>
-        </table>
-      </Section>
+                  const isDoneStep = stepState === "done";
+                  const isCurrentStep = stepState === "current";
 
-      {/* ── Payments ────────────────────────────────────────────── */}
-      <Section title="💳 Payment Transactions">
-        {(!order.payments || order.payments.length === 0) ? (
-          <p style={{ color: '#94a3b8', fontSize: 13 }}>No payment records yet.</p>
-        ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-            <thead>
-              <tr style={{ background: '#f8fafc' }}>
-                {['Amount','Method','Status','Proof','Verified By','Date','Actions'].map(h => (
-                  <th key={h} style={th}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {order.payments.map(p => {
-                const ps = { pending: ['#fef9c3','#854d0e'], verified: ['#d1fae5','#065f46'], rejected: ['#fee2e2','#991b1b'] }[p.status] || ['#f1f5f9','#475569'];
-                return (
-                  <tr key={p.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                    <td style={{ ...td, fontWeight: 600 }}>₱ {Number(p.amount).toFixed(2)}</td>
-                    <td style={td}>{p.payment_method?.replace('_', ' ')}</td>
-                    <td style={td}>
-                      <span style={{ background: ps[0], color: ps[1], padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600 }}>
-                        {p.status}
-                      </span>
-                    </td>
-                    <td style={td}>
-                      {p.proof_url
-                        ? <a href={p.proof_url} target="_blank" rel="noreferrer" style={{ color: '#1e40af', fontSize: 12 }}>View Proof</a>
-                        : '—'
-                      }
-                    </td>
-                    <td style={td}>{p.verified_by || '—'}</td>
-                    <td style={{ ...td, fontSize: 12, color: '#64748b' }}>
-                      {new Date(p.created_at).toLocaleDateString('en-PH')}
-                    </td>
-                    <td style={td}>
-                      {p.status === 'pending' && (
-                        <div style={{ display: 'flex', gap: 4 }}>
-                          <button onClick={() => verifyPayment(p.id, 'verified')} style={btnAccept}>✓ Verify</button>
-                          <button onClick={() => verifyPayment(p.id, 'rejected')} style={btnDecline}>✕ Reject</button>
+                  const leftLineActive =
+                    normalizedOrderStatus !== "cancelled" &&
+                    index > 0 &&
+                    (isDoneStep || isCurrentStep);
+
+                  const rightLineActive =
+                    normalizedOrderStatus !== "cancelled" &&
+                    index < timelineSteps.length - 1 &&
+                    isDoneStep;
+
+                  return (
+                    <div key={step} style={timelineStep}>
+                      <div style={timelineTopLine}>
+                        <div
+                          style={{
+                            ...timelineLine,
+                            background:
+                              index === 0
+                                ? "transparent"
+                                : leftLineActive
+                                  ? "#1d4ed8"
+                                  : "#e2e8f0",
+                          }}
+                        />
+
+                        <div
+                          style={{
+                            ...timelineDot,
+                            ...(stepState === "done"
+                              ? {
+                                  background: stepTone.color,
+                                  borderColor: stepTone.color,
+                                  color: "#ffffff",
+                                }
+                              : stepState === "current"
+                                ? step === "completed" &&
+                                  normalizedOrderStatus === "completed"
+                                  ? {
+                                      background: stepTone.color,
+                                      borderColor: stepTone.color,
+                                      color: "#ffffff",
+                                      boxShadow: `0 0 0 4px ${stepTone.bg}`,
+                                    }
+                                  : {
+                                      background: stepTone.bg,
+                                      borderColor: stepTone.color,
+                                      color: stepTone.color,
+                                      boxShadow: `0 0 0 4px ${stepTone.bg}`,
+                                    }
+                                : {}),
+                          }}
+                        >
+                          {stepState === "done" ||
+                          (stepState === "current" &&
+                            step === "completed" &&
+                            normalizedOrderStatus === "completed")
+                            ? "✓"
+                            : index + 1}
                         </div>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
-      </Section>
 
-      {/* ── Delivery ────────────────────────────────────────────── */}
-      {order.delivery && (
-        <Section title="🚚 Delivery Information">
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <InfoRow label="Scheduled Date" value={order.delivery.scheduled_date ? new Date(order.delivery.scheduled_date).toLocaleString('en-PH') : '—'} />
-            <InfoRow label="Status"         value={order.delivery.status} />
-            <InfoRow label="Address"        value={order.delivery.address || '—'} />
-            <InfoRow label="Signed Receipt" value={order.delivery.signed_receipt
-              ? <a href={order.delivery.signed_receipt} target="_blank" rel="noreferrer" style={{ color: '#1e40af' }}>View Receipt</a>
-              : 'Not uploaded'
-            } />
-          </div>
+                        <div
+                          style={{
+                            ...timelineLine,
+                            background:
+                              index === timelineSteps.length - 1
+                                ? "transparent"
+                                : rightLineActive
+                                  ? "#1d4ed8"
+                                  : "#e2e8f0",
+                          }}
+                        />
+                      </div>
 
-          {/* Upload delivery receipt */}
-          {!order.delivery.signed_receipt && ['shipped','delivered'].includes(order.status) && (
-            <div style={{ marginTop: 16, padding: 16, background: '#f8fafc', borderRadius: 8, border: '1px dashed #94a3b8' }}>
-              <p style={{ fontSize: 13, fontWeight: 600, color: '#374151', marginTop: 0 }}>Upload Signed Delivery Receipt</p>
-              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={e => setReceiptFile(e.target.files[0])}
-                  style={{ fontSize: 13 }}
-                />
-                <button onClick={uploadDeliveryReceipt} disabled={uploading} style={btnPrimary}>
-                  {uploading ? 'Uploading...' : '📤 Upload & Complete'}
-                </button>
+                      <div
+                        style={{
+                          ...timelineStepTitle,
+                          color:
+                            stepState === "upcoming" ? "#94a3b8" : "#0f172a",
+                        }}
+                      >
+                        {getStatusLabel(step)}
+                      </div>
+
+                      {note ? <div style={timelineStepNote}>{note}</div> : null}
+                    </div>
+                  );
+                })}
               </div>
             </div>
-          )}
-        </Section>
-      )}
+          </Section>
 
-      {/* ── Contract ────────────────────────────────────────────── */}
-      {order.contract && (
-        <Section title="📝 Contract">
-          <InfoRow label="Generated On" value={new Date(order.contract.created_at).toLocaleString('en-PH')} />
-          <InfoRow label="Warranty Terms" value={order.contract.warranty_terms || '—'} />
-          <div style={{ marginTop: 10, padding: 12, background: '#f8fafc', borderRadius: 8, fontSize: 13, color: '#374151', lineHeight: 1.6 }}>
-            <strong>Contract Terms:</strong>
-            <p style={{ marginTop: 6, whiteSpace: 'pre-wrap' }}>{order.contract.terms}</p>
+          <div style={sectionGrid}>
+            <Section title="Customer Information">
+              <InfoRow label="Name" value={order.customer_name || "—"} />
+              <InfoRow label="Email" value={order.customer_email || "—"} />
+              <InfoRow label="Phone" value={order.customer_phone || "—"} />
+              <InfoRow label="Address" value={order.customer_address || "—"} />
+            </Section>
+
+            <Section title="Order Overview">
+              <InfoRow
+                label="Date Placed"
+                value={formatDateTime(order.created_at)}
+              />
+              <InfoRow
+                label="Payment Method"
+                value={titleCase(order.payment_method)}
+              />
+              <InfoRow
+                label="Payment Status"
+                value={titleCase(
+                  order.payment_status_display ||
+                    order.payment_status ||
+                    "unpaid",
+                )}
+              />
+              <InfoRow label="Channel" value={channelMeta.label} />
+              <InfoRow
+                label="Total Amount"
+                value={formatMoney(order.total_amount)}
+                bold
+              />
+            </Section>
           </div>
-        </Section>
+
+          <Section title="Order Items">
+            <TableShell>
+              <table style={table}>
+                <thead>
+                  <tr style={theadRow}>
+                    {[
+                      "Product",
+                      "Qty",
+                      "Unit Price",
+                      "Production Cost",
+                      "Subtotal",
+                    ].map((h) => (
+                      <th key={h} style={th}>
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {(order.items || []).map((item, i) => (
+                    <tr key={i} style={tbodyRow}>
+                      <td style={td}>{item.product_name}</td>
+                      <td style={td}>{item.quantity}</td>
+                      <td style={td}>{formatMoney(item.unit_price)}</td>
+                      <td style={td}>{formatMoney(item.production_cost)}</td>
+                      <td style={{ ...td, fontWeight: 700 }}>
+                        {formatMoney(item.subtotal)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr style={tfootRow}>
+                    <td
+                      colSpan={4}
+                      style={{ ...td, textAlign: "right", fontWeight: 700 }}
+                    >
+                      Total
+                    </td>
+                    <td style={{ ...td, fontWeight: 800, color: "#1d4ed8" }}>
+                      {formatMoney(order.total_amount)}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </TableShell>
+          </Section>
+        </>
       )}
 
-      {/* ── Status Update Modal ──────────────────────────────────── */}
+      {activeTab === "payment" && (
+        <>
+          <Section title="Payment Transactions">
+            {!hasPaymentRecords ? (
+              normalizedPaymentStatus === "paid" && isCashLikePaymentMethod ? (
+                <div style={infoNotice}>
+                  Paid via {titleCase(order?.payment_method)} / no separate
+                  payment transaction record was recorded.
+                </div>
+              ) : isOnlineOrder && normalizedPaymentStatus === "paid" ? (
+                <div style={infoNotice}>
+                  This order is marked as paid, but no payment transaction
+                  record is linked yet.
+                </div>
+              ) : isOnlineOrder ? (
+                <EmptyText>No online payment transaction record yet.</EmptyText>
+              ) : (
+                <EmptyText>No payment records yet.</EmptyText>
+              )
+            ) : (
+              <TableShell>
+                <table style={table}>
+                  <thead>
+                    <tr style={theadRow}>
+                      {[
+                        "Amount",
+                        "Method",
+                        "Status",
+                        "Proof",
+                        "Verified By",
+                        "Date",
+                        ...(hasPendingPaymentActions ? ["Actions"] : []),
+                      ].map((h) => (
+                        <th key={h} style={th}>
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {order.payments.map((payment) => {
+                      const paymentTone = getTone(
+                        PAYMENT_STYLE,
+                        payment.status,
+                      );
+
+                      return (
+                        <tr key={payment.id} style={tbodyRow}>
+                          <td style={{ ...td, fontWeight: 600 }}>
+                            {formatMoney(payment.amount)}
+                          </td>
+                          <td style={td}>
+                            {titleCase(payment.payment_method)}
+                          </td>
+                          <td style={td}>
+                            <span
+                              style={{
+                                ...pill,
+                                background: paymentTone.bg,
+                                color: paymentTone.color,
+                              }}
+                            >
+                              {titleCase(payment.status)}
+                            </span>
+                          </td>
+                          <td style={td}>
+                            {payment.proof_url ? (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  openProofPreview(payment.proof_url)
+                                }
+                                style={previewLinkButton}
+                              >
+                                View Proof
+                              </button>
+                            ) : (
+                              "—"
+                            )}
+                          </td>
+                          <td style={td}>{payment.verified_by || "—"}</td>
+                          <td style={{ ...td, color: "#64748b" }}>
+                            {formatDate(payment.created_at)}
+                          </td>
+                          {hasPendingPaymentActions ? (
+                            <td style={td}>
+                              {normalize(payment.status) === "pending" ? (
+                                <div style={inlineActions}>
+                                  <button
+                                    onClick={() =>
+                                      verifyPayment(payment.id, "verified")
+                                    }
+                                    style={btnAccept}
+                                  >
+                                    Verify
+                                  </button>
+                                  <button
+                                    onClick={() =>
+                                      verifyPayment(payment.id, "rejected")
+                                    }
+                                    style={btnDecline}
+                                  >
+                                    Reject
+                                  </button>
+                                </div>
+                              ) : (
+                                <span style={mutedInline}>
+                                  No action needed
+                                </span>
+                              )}
+                            </td>
+                          ) : null}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </TableShell>
+            )}
+          </Section>
+          <Section title="Payment Summary">
+            <InfoRow
+              label="Verified Paid Amount"
+              value={formatMoney(verifiedPaymentTotal)}
+            />
+            <InfoRow
+              label="Remaining Balance"
+              value={formatMoney(paymentBalance)}
+              bold
+            />
+          </Section>
+        </>
+      )}
+
+      {activeTab === "fulfillment" && (
+        <>
+          {!(
+            order.delivery ||
+            order.contract ||
+            shouldShowMissingDeliverySection
+          ) ? (
+            <Section title="Fulfillment">
+              <EmptyText>
+                No fulfillment records yet. Delivery details and contract
+                handoff will appear here after the order moves forward.
+              </EmptyText>
+            </Section>
+          ) : (
+            <div style={detailPairGrid}>
+              {order.delivery ? (
+                <Section title="Delivery Information">
+                  <InfoRow
+                    label="Scheduled Date"
+                    value={
+                      order.delivery.scheduled_date
+                        ? formatDateTime(order.delivery.scheduled_date)
+                        : "—"
+                    }
+                  />
+                  <InfoRow
+                    label="Status"
+                    value={titleCase(order.delivery.status)}
+                  />
+                  <InfoRow
+                    label="Delivered On"
+                    value={
+                      order.delivery.delivered_date
+                        ? formatDateTime(order.delivery.delivered_date)
+                        : "—"
+                    }
+                  />
+                  <InfoRow
+                    label="Address"
+                    value={order.delivery.address || "—"}
+                  />
+                  <InfoRow
+                    label="Signed Receipt"
+                    value={
+                      order.delivery.signed_receipt ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            openDeliveryReceiptPreview(
+                              order.delivery.signed_receipt,
+                            )
+                          }
+                          style={previewLinkButton}
+                        >
+                          View Receipt
+                        </button>
+                      ) : (
+                        "Not uploaded"
+                      )
+                    }
+                  />
+
+                  {!order.delivery.signed_receipt &&
+                    ["shipping", "delivered"].includes(
+                      normalizedOrderStatus,
+                    ) && (
+                      <div style={noticeBox}>
+                        <div style={noticeTitle}>
+                          Upload Signed Delivery Receipt
+                        </div>
+                        <div style={uploadRow}>
+                          <input
+                            type="file"
+                            accept="image/*,.pdf"
+                            onChange={(e) =>
+                              setReceiptFile(e.target.files[0] || null)
+                            }
+                            style={{ fontSize: 12 }}
+                          />
+                          {receiptFile && (
+                            <div
+                              style={{
+                                fontSize: 12,
+                                color: "#64748b",
+                                fontWeight: 600,
+                              }}
+                            >
+                              Selected file: {receiptFile.name}
+                            </div>
+                          )}
+                          <button
+                            onClick={uploadDeliveryReceipt}
+                            disabled={uploading}
+                            style={btnPrimary}
+                          >
+                            {uploading ? "Uploading..." : "Upload Receipt"}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                </Section>
+              ) : shouldShowMissingDeliverySection ? (
+                <Section title="Delivery Information">
+                  <div
+                    style={{
+                      background: "#fffbeb",
+                      border: "1px solid #fde68a",
+                      color: "#92400e",
+                      borderRadius: 12,
+                      padding: "9px 11px",
+                      fontSize: 12,
+                      fontWeight: 700,
+                      marginBottom: 8,
+                    }}
+                  >
+                    This order is already in the delivery phase, but no delivery
+                    record is linked yet.
+                  </div>
+
+                  <div
+                    style={{
+                      fontSize: 12,
+                      color: "#64748b",
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    Create or link a delivery record first before uploading a
+                    signed delivery receipt.
+                  </div>
+                </Section>
+              ) : null}
+
+              {order.contract && (
+                <Section title="Contract">
+                  <InfoRow
+                    label="Generated On"
+                    value={formatDateTime(order.contract.created_at)}
+                  />
+                  <InfoRow
+                    label="Warranty Terms"
+                    value={order.contract.warranty_terms || "—"}
+                  />
+
+                  {hasContractTerms && (
+                    <div style={textBlock}>
+                      <div style={textBlockTitle}>Contract Terms</div>
+                      <p style={multilineText}>
+                        {order.contract.materials_used}
+                      </p>
+                    </div>
+                  )}
+                </Section>
+              )}
+            </div>
+          )}
+        </>
+      )}
+
+      {activeTab === "blueprint" && (
+        <>
+          {(blueprintId || order.contract || hasBlueprintTasks) && (
+            <Section title="Blueprint Assignment">
+              <InfoRow
+                label="Blueprint Reference"
+                value={
+                  blueprintId ? (
+                    <button
+                      onClick={() =>
+                        navigate(`/blueprints/${blueprintId}/design`)
+                      }
+                      style={linkButton}
+                    >
+                      BP-{String(blueprintId).padStart(5, "0")}
+                    </button>
+                  ) : (
+                    "—"
+                  )
+                }
+              />
+              <InfoRow label="Assignment Phase" value={assignmentPhaseText} />
+              <InfoRow
+                label="Active Assignment Count"
+                value={String(activeBlueprintTasks.length)}
+              />
+              <InfoRow
+                label="Completed Task Count"
+                value={String(completedBlueprintTasks.length)}
+              />
+              {needsContractFirst && (
+                <div style={{ ...alertWarning, marginTop: 12 }}>
+                  Generate the contract first from Contracts before moving this
+                  blueprint order into production or assigning staff.
+                </div>
+              )}
+
+              {blueprintTasks.length > 0 ? (
+                <div style={taskList}>
+                  <div style={taskListHeader}>Current Blueprint Tasks</div>
+
+                  {blueprintTasks.map((task) => {
+                    const taskStatus = normalize(task.status);
+                    const taskTone = getTone(TASK_STYLE, taskStatus);
+                    const isActive = ["pending", "in_progress"].includes(
+                      taskStatus,
+                    );
+
+                    return (
+                      <div key={task.id} style={taskCard}>
+                        <div style={taskTop}>
+                          <div>
+                            <div style={taskTitle}>
+                              {task.task_role || "Task"}
+                            </div>
+                            <div style={taskMeta}>
+                              Assigned to {task.assigned_to_name || "—"} • by{" "}
+                              {task.assigned_by_name || "—"}
+                            </div>
+                          </div>
+
+                          <span
+                            style={{
+                              ...pill,
+                              background: taskTone.bg,
+                              color: taskTone.color,
+                            }}
+                          >
+                            {titleCase(task.status)}
+                          </span>
+                        </div>
+
+                        <div style={taskDetailsGrid}>
+                          <MiniInfo
+                            label="Due Date"
+                            value={
+                              task.due_date
+                                ? formatDateTime(task.due_date)
+                                : "—"
+                            }
+                          />
+                          <MiniInfo
+                            label="Note"
+                            value={task.description || "—"}
+                          />
+                        </div>
+
+                        <div style={taskActions}>
+                          {isDeliveryPhaseOrDone ? (
+                            <span style={mutedBadge}>
+                              Task updates locked during delivery/completion
+                            </span>
+                          ) : (
+                            <>
+                              {taskStatus === "pending" && (
+                                <button
+                                  onClick={() =>
+                                    handleTaskStatusUpdate(
+                                      task.id,
+                                      "in_progress",
+                                    )
+                                  }
+                                  disabled={updatingTaskId === task.id}
+                                  style={btnPrimarySm}
+                                >
+                                  {updatingTaskId === task.id
+                                    ? "Updating..."
+                                    : "Start Task"}
+                                </button>
+                              )}
+
+                              {taskStatus === "in_progress" && (
+                                <button
+                                  onClick={() =>
+                                    handleTaskStatusUpdate(task.id, "completed")
+                                  }
+                                  disabled={updatingTaskId === task.id}
+                                  style={btnAccept}
+                                >
+                                  {updatingTaskId === task.id
+                                    ? "Updating..."
+                                    : "Mark Completed"}
+                                </button>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <EmptyText>No blueprint staff assignments yet.</EmptyText>
+              )}
+
+              {canAssignBlueprintStaff && (
+                <div style={{ marginTop: 12 }}>
+                  <button
+                    onClick={openAssignModal}
+                    disabled={!blueprintId || loadingAssignable}
+                    style={{
+                      ...btnPrimary,
+                      background: canAssignBlueprintStaff
+                        ? "#7c3aed"
+                        : "#94a3b8",
+                      borderColor: canAssignBlueprintStaff
+                        ? "#7c3aed"
+                        : "#94a3b8",
+                      opacity:
+                        !blueprintId ||
+                        loadingAssignable ||
+                        !canAssignBlueprintStaff
+                          ? 0.75
+                          : 1,
+                      cursor:
+                        !blueprintId ||
+                        loadingAssignable ||
+                        !canAssignBlueprintStaff
+                          ? "not-allowed"
+                          : "pointer",
+                    }}
+                    title={
+                      canAssignBlueprintStaff
+                        ? hasBlueprintTasks
+                          ? "Manage blueprint staff assignments"
+                          : "Assign staff to blueprint"
+                        : "Available only after contract release or during production"
+                    }
+                  >
+                    {loadingAssignable
+                      ? "Loading Staff..."
+                      : hasBlueprintTasks
+                        ? "Manage Assignment"
+                        : "Assign Staff to Blueprint"}
+                  </button>
+                </div>
+              )}
+            </Section>
+          )}
+        </>
+      )}
+      {proofPreview.open && (
+        <div style={overlay}>
+          <div style={{ ...modalBox, width: 820, maxWidth: "96vw" }}>
+            <div style={modalHeader}>
+              <div>
+                <h3 style={modalTitle}>Payment Proof Preview</h3>
+                <p style={modalSubtitle}>
+                  Review the uploaded payment proof before verifying the
+                  transaction.
+                </p>
+              </div>
+            </div>
+
+            <div style={proofPreviewBox}>
+              {proofPreview.type === "image" ? (
+                <img
+                  src={proofPreview.url}
+                  alt="Payment proof"
+                  style={proofPreviewImage}
+                />
+              ) : proofPreview.type === "pdf" ? (
+                <iframe
+                  src={proofPreview.url}
+                  title="Payment proof preview"
+                  style={proofPreviewFrame}
+                />
+              ) : (
+                <div style={proofPreviewFallback}>
+                  Inline preview is not available for this file type.
+                </div>
+              )}
+            </div>
+
+            <div style={modalActions}>
+              <a
+                href={proofPreview.url}
+                target="_blank"
+                rel="noreferrer"
+                style={btnSecondaryLink}
+              >
+                Open in New Tab
+              </a>
+              <button onClick={closeProofPreview} style={btnPrimary}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {deliveryReceiptPreview.open && (
+        <div style={overlay}>
+          <div style={{ ...modalBox, width: 820, maxWidth: "96vw" }}>
+            <div style={modalHeader}>
+              <div>
+                <h3 style={modalTitle}>Signed Delivery Receipt</h3>
+                <p style={modalSubtitle}>
+                  Review the uploaded signed delivery receipt for this order.
+                </p>
+              </div>
+            </div>
+
+            <div style={proofPreviewBox}>
+              {deliveryReceiptPreview.type === "image" ? (
+                <img
+                  src={deliveryReceiptPreview.url}
+                  alt="Signed delivery receipt"
+                  style={proofPreviewImage}
+                />
+              ) : deliveryReceiptPreview.type === "pdf" ? (
+                <iframe
+                  src={deliveryReceiptPreview.url}
+                  title="Signed delivery receipt preview"
+                  style={proofPreviewFrame}
+                />
+              ) : (
+                <div style={proofPreviewFallback}>
+                  Inline preview is not available for this file type.
+                </div>
+              )}
+            </div>
+
+            <div style={modalActions}>
+              <a
+                href={deliveryReceiptPreview.url}
+                target="_blank"
+                rel="noreferrer"
+                style={btnSecondaryLink}
+              >
+                Open in New Tab
+              </a>
+              <button onClick={closeDeliveryReceiptPreview} style={btnPrimary}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {statusModal && (
         <div style={overlay}>
           <div style={modalBox}>
-            <h3 style={{ margin: '0 0 16px' }}>Update Order Status</h3>
-            <p style={{ fontSize: 13, color: '#64748b', marginBottom: 16 }}>
-              Current status: <strong>{order.status}</strong>
-            </p>
+            <div style={modalHeader}>
+              <div>
+                <h3 style={modalTitle}>Update Order Status</h3>
+                <p style={modalSubtitle}>
+                  Choose the next valid status for this order.
+                </p>
+              </div>
+            </div>
+
+            {hasBlueprintTasks && !allBlueprintTasksCompleted && (
+              <div style={alertWarning}>
+                Shipping, delivered, and completed are locked until all
+                blueprint tasks are marked completed.
+              </div>
+            )}
+
+            {!isWalkInOrder && !order?.delivery && (
+              <div style={alertWarning}>
+                Completed is locked until a delivery record is created.
+              </div>
+            )}
+
+            {!isWalkInOrder &&
+              order?.delivery &&
+              !order?.delivery?.signed_receipt && (
+                <div style={alertWarning}>
+                  Completed is locked until a signed delivery receipt is
+                  uploaded.
+                </div>
+              )}
+
+            {paymentBalance > 0 && (
+              <div style={alertWarning}>
+                Completed is locked until the remaining balance is fully paid.
+              </div>
+            )}
+            {standardNeedsFullPaymentBeforeFulfillment && (
+              <div style={alertWarning}>
+                Shipping and delivered are locked for standard delivery orders
+                until full payment is completed.
+              </div>
+            )}
+
+            {blueprintNeedsDownPaymentBeforeProduction && (
+              <div style={alertWarning}>
+                Production is locked for blueprint orders until at least 30%
+                verified down payment is completed.
+              </div>
+            )}
+
             <label style={labelSm}>New Status</label>
-            <select value={newStatus} onChange={e => setNewStatus(e.target.value)} style={{ ...inputFull, marginBottom: 20 }}>
-              {ORDER_STATUSES.map(s => (
-                <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
-              ))}
+            <select
+              value={newStatus}
+              onChange={(e) => setNewStatus(e.target.value)}
+              style={{ ...inputFull, marginBottom: 18 }}
+            >
+              {!allowedNextStatuses.length && (
+                <option value="">No further status available</option>
+              )}
+
+              {allowedNextStatuses.map((status) => {
+                const blockedByIncompleteTasks =
+                  hasBlueprintTasks &&
+                  !allBlueprintTasksCompleted &&
+                  ["shipping", "delivered", "completed"].includes(
+                    normalize(status),
+                  );
+
+                const blockedByMissingReceipt =
+                  !isWalkInOrder &&
+                  normalize(status) === "completed" &&
+                  (!order?.delivery || !hasSignedDeliveryReceipt);
+
+                const blockedByUnsettledPayment =
+                  normalize(status) === "completed" && paymentBalance > 0;
+                const blockedByStandardFullPayment =
+                  !isWalkInOrder &&
+                  !isBlueprintOrder &&
+                  ["shipping", "delivered"].includes(normalize(status)) &&
+                  paymentBalance > 0;
+
+                const blockedByBlueprintDownPayment =
+                  isBlueprintOrder &&
+                  normalize(status) === "production" &&
+                  !hasRequiredBlueprintDownPayment;
+                return (
+                  <option
+                    key={status}
+                    value={status}
+                    disabled={
+                      blockedByIncompleteTasks ||
+                      blockedByMissingReceipt ||
+                      blockedByUnsettledPayment ||
+                      blockedByStandardFullPayment ||
+                      blockedByBlueprintDownPayment
+                    }
+                  >
+                    {getStatusLabel(status)}
+                    {blockedByIncompleteTasks
+                      ? " — complete blueprint tasks first"
+                      : blockedByMissingReceipt
+                        ? !order?.delivery
+                          ? " — create delivery record first"
+                          : " — upload signed receipt first"
+                        : blockedByStandardFullPayment
+                          ? " — standard orders must be fully paid first"
+                          : blockedByBlueprintDownPayment
+                            ? " — 30% verified down payment required first"
+                            : blockedByUnsettledPayment
+                              ? " — full payment required first"
+                              : ""}
+                  </option>
+                );
+              })}
             </select>
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-              <button onClick={() => setStatusModal(false)} style={btnGhost}>Cancel</button>
-              <button onClick={handleStatusUpdate} style={btnPrimary}>Update Status</button>
+
+            <div style={modalActions}>
+              <button
+                onClick={() => setStatusModal(false)}
+                style={btnSecondary}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleStatusUpdate}
+                style={btnPrimary}
+                disabled={!allowedNextStatuses.length || !newStatus}
+              >
+                Update Status
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {assignModal && (
+        <div style={overlay}>
+          <div style={{ ...modalBox, width: 540 }}>
+            <div style={modalHeader}>
+              <div>
+                <h3 style={modalTitle}>Assign Staff to Blueprint</h3>
+                <p style={modalSubtitle}>
+                  Order #{String(order.id).padStart(5, "0")}
+                  {assignmentBlueprintId
+                    ? ` • Blueprint BP-${String(assignmentBlueprintId).padStart(5, "0")}`
+                    : ""}
+                </p>
+              </div>
+            </div>
+
+            <div style={formGrid}>
+              <div>
+                <label style={labelSm}>Staff Member</label>
+                <select
+                  value={assignForm.staff_id}
+                  onChange={(e) =>
+                    setAssignForm((prev) => ({
+                      ...prev,
+                      staff_id: e.target.value,
+                    }))
+                  }
+                  style={inputFull}
+                >
+                  <option value="">— Select Staff —</option>
+                  {assignableStaff.map((staff) => (
+                    <option key={staff.id} value={staff.id}>
+                      {staff.name} — {staff.active_task_count} active task
+                      {Number(staff.active_task_count) === 1 ? "" : "s"}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label style={labelSm}>Task Role</label>
+                <select
+                  value={assignForm.task_role}
+                  onChange={(e) =>
+                    setAssignForm((prev) => ({
+                      ...prev,
+                      task_role: e.target.value,
+                    }))
+                  }
+                  style={inputFull}
+                >
+                  <option value="Cabinet Maker">Cabinet Maker</option>
+                  <option value="Installer">Installer</option>
+                  <option value="Finishing">Finishing</option>
+                  <option value="Quality Check">Quality Check</option>
+                  <option value="Delivery Support">Delivery Support</option>
+                </select>
+              </div>
+            </div>
+
+            <div style={{ marginTop: 12 }}>
+              <label style={labelSm}>Due Date</label>
+              <input
+                type="datetime-local"
+                value={assignForm.due_date}
+                onChange={(e) =>
+                  setAssignForm((prev) => ({
+                    ...prev,
+                    due_date: e.target.value,
+                  }))
+                }
+                style={inputFull}
+              />
+            </div>
+
+            <div style={{ marginTop: 12 }}>
+              <label style={labelSm}>Assignment Note (optional)</label>
+              <textarea
+                rows={4}
+                value={assignForm.note}
+                onChange={(e) =>
+                  setAssignForm((prev) => ({ ...prev, note: e.target.value }))
+                }
+                style={{ ...inputFull, resize: "vertical", paddingTop: 10 }}
+                placeholder="Add instructions or production notes..."
+              />
+            </div>
+
+            {assignableStaff.length === 0 && (
+              <div style={{ ...alertWarning, marginTop: 14 }}>
+                No active staff available for assignment.
+              </div>
+            )}
+
+            <div style={modalActions}>
+              <button
+                onClick={() => setAssignModal(false)}
+                style={btnSecondary}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAssignStaff}
+                disabled={assigning || assignableStaff.length === 0}
+                style={btnPrimary}
+              >
+                {assigning ? "Assigning..." : "Assign Staff"}
+              </button>
             </div>
           </div>
         </div>
@@ -289,11 +2029,12 @@ export default function OrderDetailPage() {
   );
 }
 
-// ── Sub-components ────────────────────────────────────────────────────────────
 function Section({ title, children }) {
   return (
-    <div style={{ background: '#fff', borderRadius: 12, padding: 24, marginBottom: 16, boxShadow: '0 1px 6px rgba(0,0,0,.08)', gridColumn: 'span 1' }}>
-      <h3 style={{ fontSize: 14, fontWeight: 700, color: '#1e2a38', margin: '0 0 14px', paddingBottom: 10, borderBottom: '1px solid #f1f5f9' }}>{title}</h3>
+    <div style={sectionCard}>
+      <div style={sectionHeader}>
+        <h3 style={sectionTitle}>{title}</h3>
+      </div>
       {children}
     </div>
   );
@@ -301,23 +2042,746 @@ function Section({ title, children }) {
 
 function InfoRow({ label, value, bold }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '6px 0', borderBottom: '1px solid #f8fafc' }}>
-      <span style={{ fontSize: 12, color: '#64748b', fontWeight: 500 }}>{label}</span>
-      <span style={{ fontSize: 13, color: '#374151', fontWeight: bold ? 700 : 400, textAlign: 'right', maxWidth: '60%' }}>{value}</span>
+    <div style={infoRow}>
+      <span style={infoLabel}>{label}</span>
+      <span style={{ ...infoValue, fontWeight: bold ? 700 : 500 }}>
+        {value}
+      </span>
     </div>
   );
 }
 
-// ── Styles ────────────────────────────────────────────────────────────────────
-const center    = { display: 'flex', alignItems: 'center', justifyContent: 'center', height: 300, color: '#64748b' };
-const th        = { textAlign: 'left', padding: '10px 14px', fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' };
-const td        = { padding: '10px 14px', color: '#374151', verticalAlign: 'middle' };
-const labelSm   = { fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 6 };
-const inputFull = { width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13, boxSizing: 'border-box' };
-const overlay   = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 };
-const modalBox  = { background: '#fff', borderRadius: 12, padding: 28, width: 400, boxShadow: '0 20px 60px rgba(0,0,0,.3)' };
-const btnBack   = { padding: '6px 14px', background: '#f1f5f9', color: '#374151', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13 };
-const btnPrimary= { padding: '8px 18px', background: '#1e40af', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600 };
-const btnGhost  = { padding: '8px 18px', background: '#f1f5f9', color: '#374151', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13 };
-const btnAccept = { padding: '5px 12px', background: '#d1fae5', color: '#065f46', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 700 };
-const btnDecline= { padding: '5px 12px', background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 700 };
+function MiniInfo({ label, value }) {
+  return (
+    <div style={miniInfoCard}>
+      <div style={miniInfoLabel}>{label}</div>
+      <div style={miniInfoValue}>{value}</div>
+    </div>
+  );
+}
+
+function EmptyText({ children }) {
+  return <p style={emptyText}>{children}</p>;
+}
+
+function TableShell({ children }) {
+  return <div style={tableShell}>{children}</div>;
+}
+
+const pageShell = {
+  maxWidth: 1120,
+  margin: "0 auto",
+  display: "flex",
+  flexDirection: "column",
+  gap: 12,
+};
+
+const heroCard = {
+  background: "#ffffff",
+  border: "1px solid #e5e7eb",
+  borderRadius: 18,
+  padding: 14,
+  boxShadow: "0 4px 12px rgba(15, 23, 42, 0.035)",
+};
+
+const heroTop = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "flex-start",
+  gap: 12,
+  flexWrap: "wrap",
+  marginBottom: 10,
+};
+
+const eyebrow = {
+  fontSize: 10,
+  fontWeight: 700,
+  letterSpacing: "0.12em",
+  textTransform: "uppercase",
+  color: "#64748b",
+  marginBottom: 6,
+};
+
+const heroTitleRow = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  flexWrap: "wrap",
+};
+
+const pageTitle = {
+  margin: 0,
+  fontSize: 20,
+  lineHeight: 1.12,
+  fontWeight: 700,
+  color: "#0f172a",
+};
+
+const pageSubtitle = {
+  margin: "6px 0 0",
+  fontSize: 12,
+  color: "#64748b",
+  lineHeight: 1.5,
+  maxWidth: 620,
+};
+
+const heroActions = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  flexWrap: "wrap",
+};
+
+const detailTabRow = {
+  display: "flex",
+  gap: 8,
+  flexWrap: "wrap",
+  marginTop: 10,
+  paddingTop: 10,
+  borderTop: "1px solid #eef2f7",
+};
+
+const detailTabButton = {
+  padding: "8px 14px",
+  borderRadius: 999,
+  border: "1px solid #e2e8f0",
+  background: "#ffffff",
+  color: "#475569",
+  fontSize: 12,
+  fontWeight: 600,
+  cursor: "pointer",
+};
+
+const statsGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+  gap: 10,
+};
+
+const statCard = {
+  background: "#ffffff",
+  border: "1px solid #e5e7eb",
+  borderRadius: 14,
+  padding: "9px 11px",
+};
+
+const statTop = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 8,
+  marginBottom: 6,
+};
+
+const toneDot = {
+  display: "inline-block",
+  width: 8,
+  height: 8,
+  borderRadius: 999,
+  flexShrink: 0,
+};
+
+const statLabel = {
+  fontSize: 10,
+  fontWeight: 700,
+  letterSpacing: "0.08em",
+  textTransform: "uppercase",
+  color: "#94a3b8",
+};
+
+const statValue = {
+  fontSize: 16,
+  fontWeight: 700,
+  color: "#0f172a",
+};
+
+const sectionGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+  gap: 12,
+};
+
+const detailPairGrid = {
+  display: "grid",
+  gridTemplateColumns: "1.1fr 0.9fr",
+  gap: 12,
+  alignItems: "start",
+};
+
+const sectionCard = {
+  background: "#ffffff",
+  border: "1px solid #e5e7eb",
+  borderRadius: 16,
+  padding: 14,
+  boxShadow: "0 2px 6px rgba(15, 23, 42, 0.028)",
+};
+
+const sectionHeader = {
+  marginBottom: 10,
+  paddingBottom: 8,
+  borderBottom: "1px solid #f1f5f9",
+};
+
+const sectionTitle = {
+  margin: 0,
+  fontSize: 15,
+  fontWeight: 700,
+  color: "#0f172a",
+};
+
+const infoRow = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "flex-start",
+  gap: 14,
+  padding: "7px 0",
+  borderBottom: "1px solid #f8fafc",
+};
+
+const infoLabel = {
+  fontSize: 11,
+  color: "#64748b",
+  fontWeight: 600,
+  minWidth: 120,
+};
+
+const infoValue = {
+  fontSize: 13,
+  color: "#0f172a",
+  textAlign: "right",
+  maxWidth: "72%",
+  wordBreak: "break-word",
+  lineHeight: 1.45,
+};
+
+const tableShell = {
+  width: "100%",
+  overflowX: "auto",
+  border: "1px solid #e5e7eb",
+  borderRadius: 14,
+};
+
+const table = {
+  width: "100%",
+  borderCollapse: "separate",
+  borderSpacing: 0,
+  minWidth: 680,
+};
+
+const theadRow = {
+  background: "#f8fafc",
+};
+
+const tbodyRow = {
+  background: "#ffffff",
+};
+
+const tfootRow = {
+  background: "#f8fafc",
+};
+
+const th = {
+  textAlign: "left",
+  padding: "9px 11px",
+  fontSize: 10,
+  fontWeight: 700,
+  color: "#64748b",
+  textTransform: "uppercase",
+  letterSpacing: "0.08em",
+  borderBottom: "1px solid #edf2f7",
+};
+
+const td = {
+  padding: "9px 11px",
+  color: "#334155",
+  fontSize: 12,
+  borderBottom: "1px solid #f1f5f9",
+  verticalAlign: "middle",
+};
+
+const emptyText = {
+  margin: 0,
+  fontSize: 12,
+  color: "#94a3b8",
+  lineHeight: 1.5,
+};
+
+const infoNotice = {
+  background: "#eff6ff",
+  border: "1px solid #bfdbfe",
+  color: "#1d4ed8",
+  borderRadius: 12,
+  padding: "9px 11px",
+  fontSize: 12,
+  fontWeight: 600,
+};
+
+const noticeBox = {
+  marginTop: 12,
+  padding: 12,
+  background: "#f8fafc",
+  borderRadius: 12,
+  border: "1px dashed #cbd5e1",
+};
+
+const noticeTitle = {
+  fontSize: 12,
+  fontWeight: 600,
+  color: "#334155",
+  marginBottom: 10,
+};
+
+const uploadRow = {
+  display: "flex",
+  gap: 8,
+  alignItems: "center",
+  flexWrap: "wrap",
+};
+
+const textBlock = {
+  marginTop: 12,
+  padding: 12,
+  borderRadius: 12,
+  background: "#f8fafc",
+  border: "1px solid #e2e8f0",
+};
+
+const textBlockTitle = {
+  fontSize: 11,
+  fontWeight: 700,
+  color: "#334155",
+  marginBottom: 8,
+  textTransform: "uppercase",
+  letterSpacing: "0.06em",
+};
+
+const multilineText = {
+  margin: 0,
+  fontSize: 12,
+  color: "#334155",
+  lineHeight: 1.6,
+  whiteSpace: "pre-wrap",
+};
+
+const taskList = {
+  marginTop: 12,
+  border: "1px solid #e5e7eb",
+  borderRadius: 14,
+  overflow: "hidden",
+};
+
+const taskListHeader = {
+  padding: "9px 11px",
+  background: "#f8fafc",
+  borderBottom: "1px solid #e2e8f0",
+  fontSize: 11,
+  fontWeight: 700,
+  color: "#334155",
+  textTransform: "uppercase",
+  letterSpacing: "0.06em",
+};
+
+const taskCard = {
+  padding: 12,
+  borderBottom: "1px solid #f1f5f9",
+  background: "#ffffff",
+};
+
+const taskTop = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "flex-start",
+  gap: 10,
+  marginBottom: 10,
+};
+
+const taskTitle = {
+  fontSize: 13,
+  fontWeight: 700,
+  color: "#0f172a",
+  marginBottom: 4,
+};
+
+const taskMeta = {
+  fontSize: 11,
+  color: "#64748b",
+  lineHeight: 1.5,
+};
+
+const taskDetailsGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+  gap: 8,
+  marginBottom: 10,
+};
+
+const miniInfoCard = {
+  background: "#f8fafc",
+  border: "1px solid #e5e7eb",
+  borderRadius: 10,
+  padding: 10,
+};
+
+const miniInfoLabel = {
+  fontSize: 10,
+  fontWeight: 700,
+  color: "#94a3b8",
+  textTransform: "uppercase",
+  letterSpacing: "0.08em",
+  marginBottom: 4,
+};
+
+const miniInfoValue = {
+  fontSize: 12,
+  fontWeight: 600,
+  color: "#0f172a",
+  lineHeight: 1.5,
+  wordBreak: "break-word",
+};
+
+const taskActions = {
+  display: "flex",
+  gap: 6,
+  flexWrap: "wrap",
+  alignItems: "center",
+};
+
+const timelineCancelNotice = {
+  marginBottom: 10,
+  padding: "9px 11px",
+  background: "#fef2f2",
+  border: "1px solid #fecaca",
+  borderRadius: 12,
+  fontSize: 12,
+  fontWeight: 600,
+  color: "#dc2626",
+};
+
+const timelineScroller = {
+  width: "100%",
+  overflowX: "auto",
+  paddingBottom: 2,
+};
+
+const timelineRail = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+  alignItems: "start",
+  columnGap: 0,
+  rowGap: 0,
+  width: "100%",
+  minWidth: 640,
+};
+
+const timelineStep = {
+  minWidth: 0,
+  display: "flex",
+  flexDirection: "column",
+};
+
+const timelineTopLine = {
+  display: "flex",
+  alignItems: "center",
+  marginBottom: 10,
+};
+const timelineLine = {
+  flex: 1,
+  height: 3,
+  borderRadius: 999,
+  background: "#e2e8f0",
+};
+
+const timelineDot = {
+  width: 26,
+  height: 26,
+  borderRadius: 999,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: 12,
+  fontWeight: 700,
+  border: "1px solid #cbd5e1",
+  background: "#ffffff",
+  color: "#94a3b8",
+  flexShrink: 0,
+};
+
+const timelineStepTitle = {
+  fontSize: 12,
+  fontWeight: 700,
+  color: "#0f172a",
+  marginBottom: 4,
+  lineHeight: 1.35,
+  textAlign: "center",
+  padding: "0 8px",
+};
+
+const timelineStepNote = {
+  fontSize: 11,
+  color: "#64748b",
+  lineHeight: 1.45,
+  textAlign: "center",
+  padding: "0 8px",
+};
+
+const mutedBadge = {
+  fontSize: 11,
+  fontWeight: 600,
+  color: "#64748b",
+  background: "#f8fafc",
+  border: "1px solid #e2e8f0",
+  borderRadius: 999,
+  padding: "6px 10px",
+};
+
+const pill = {
+  display: "inline-flex",
+  alignItems: "center",
+  padding: "4px 9px",
+  borderRadius: 999,
+  fontSize: 10,
+  fontWeight: 700,
+  whiteSpace: "nowrap",
+};
+
+const inlineActions = {
+  display: "flex",
+  gap: 8,
+  flexWrap: "wrap",
+};
+
+const mutedInline = {
+  fontSize: 12,
+  color: "#94a3b8",
+};
+
+const previewLinkButton = {
+  background: "none",
+  border: "none",
+  padding: 0,
+  color: "#1d4ed8",
+  fontWeight: 700,
+  fontSize: 12,
+  cursor: "pointer",
+  textDecoration: "underline",
+};
+
+const proofPreviewBox = {
+  border: "1px solid #e5e7eb",
+  borderRadius: 14,
+  background: "#f8fafc",
+  padding: 12,
+  minHeight: 320,
+  maxHeight: "70vh",
+  overflow: "auto",
+};
+
+const proofPreviewImage = {
+  display: "block",
+  maxWidth: "100%",
+  width: "100%",
+  height: "auto",
+  borderRadius: 10,
+};
+
+const proofPreviewFrame = {
+  width: "100%",
+  height: "65vh",
+  border: "none",
+  borderRadius: 10,
+  background: "#ffffff",
+};
+
+const proofPreviewFallback = {
+  minHeight: 220,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  textAlign: "center",
+  color: "#64748b",
+  fontSize: 13,
+  fontWeight: 600,
+  padding: 20,
+};
+
+const btnSecondaryLink = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "8px 12px",
+  background: "#ffffff",
+  color: "#334155",
+  border: "1px solid #d1d5db",
+  borderRadius: 10,
+  fontSize: 12,
+  fontWeight: 700,
+  textDecoration: "none",
+};
+
+const linkButton = {
+  background: "none",
+  border: "none",
+  color: "#1d4ed8",
+  fontWeight: 700,
+  cursor: "pointer",
+  padding: 0,
+  fontSize: 13,
+};
+
+const overlay = {
+  position: "fixed",
+  inset: 0,
+  background: "rgba(15, 23, 42, 0.45)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  zIndex: 1000,
+  padding: 20,
+};
+
+const modalBox = {
+  background: "#fff",
+  borderRadius: 18,
+  padding: 20,
+  width: 460,
+  maxWidth: "100%",
+  boxShadow: "0 25px 60px rgba(15, 23, 42, 0.28)",
+};
+
+const modalHeader = {
+  marginBottom: 14,
+};
+
+const modalTitle = {
+  margin: 0,
+  fontSize: 18,
+  fontWeight: 700,
+  color: "#0f172a",
+};
+
+const modalSubtitle = {
+  margin: "6px 0 0",
+  fontSize: 12,
+  color: "#64748b",
+  lineHeight: 1.5,
+};
+
+const alertWarning = {
+  background: "#fffbeb",
+  border: "1px solid #fde68a",
+  color: "#92400e",
+  borderRadius: 12,
+  padding: "9px 11px",
+  fontSize: 12,
+  fontWeight: 600,
+  marginBottom: 10,
+};
+
+const formGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+  gap: 12,
+};
+
+const modalActions = {
+  display: "flex",
+  gap: 10,
+  justifyContent: "flex-end",
+  marginTop: 18,
+  flexWrap: "wrap",
+};
+
+const labelSm = {
+  fontSize: 12,
+  fontWeight: 600,
+  color: "#334155",
+  display: "block",
+  marginBottom: 6,
+};
+
+const inputFull = {
+  width: "100%",
+  padding: "9px 11px",
+  border: "1px solid #d1d5db",
+  borderRadius: 10,
+  fontSize: 13,
+  boxSizing: "border-box",
+  background: "#fff",
+  color: "#0f172a",
+};
+
+const center = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  height: 320,
+  color: "#64748b",
+  fontSize: 14,
+  fontWeight: 600,
+};
+
+const btnBack = {
+  padding: "8px 10px",
+  background: "#ffffff",
+  color: "#334155",
+  border: "1px solid #d1d5db",
+  borderRadius: 10,
+  cursor: "pointer",
+  fontSize: 12,
+  fontWeight: 600,
+};
+
+const btnPrimary = {
+  padding: "8px 12px",
+  background: "#1d4ed8",
+  color: "#fff",
+  border: "1px solid #1d4ed8",
+  borderRadius: 10,
+  cursor: "pointer",
+  fontSize: 12,
+  fontWeight: 600,
+};
+
+const btnPrimarySm = {
+  padding: "7px 10px",
+  background: "#1d4ed8",
+  color: "#fff",
+  border: "1px solid #1d4ed8",
+  borderRadius: 10,
+  cursor: "pointer",
+  fontSize: 12,
+  fontWeight: 600,
+};
+
+const btnSecondary = {
+  padding: "8px 12px",
+  background: "#ffffff",
+  color: "#334155",
+  border: "1px solid #d1d5db",
+  borderRadius: 10,
+  cursor: "pointer",
+  fontSize: 12,
+  fontWeight: 600,
+};
+
+const btnAccept = {
+  padding: "7px 10px",
+  background: "#ecfdf5",
+  color: "#047857",
+  border: "1px solid #a7f3d0",
+  borderRadius: 10,
+  cursor: "pointer",
+  fontSize: 12,
+  fontWeight: 600,
+};
+
+const btnDecline = {
+  padding: "7px 10px",
+  background: "#fef2f2",
+  color: "#dc2626",
+  border: "1px solid #fecaca",
+  borderRadius: 10,
+  cursor: "pointer",
+  fontSize: 12,
+  fontWeight: 600,
+};

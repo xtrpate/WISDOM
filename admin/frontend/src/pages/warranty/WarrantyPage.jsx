@@ -1,407 +1,599 @@
-// src/pages/warranty/WarrantyPage.jsx – Warranty Management (Admin)
-import React, { useEffect, useState, useCallback } from 'react';
-import api from '../../services/api';
-import toast from 'react-hot-toast';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import api from "../../services/api";
+import toast from "react-hot-toast";
 
-const STATUS_STYLE = {
-  pending:   { bg: '#fef9c3', color: '#854d0e',  label: 'Pending' },
-  approved:  { bg: '#dbeafe', color: '#1e40af',  label: 'Approved' },
-  rejected:  { bg: '#fee2e2', color: '#991b1b',  label: 'Rejected' },
-  fulfilled: { bg: '#d1fae5', color: '#065f46',  label: 'Fulfilled' },
+const POLICY_STYLE = {
+  full_refund: { bg: "#dcfce7", color: "#166534", label: "Full Refund" },
+  processing_fee: { bg: "#fef3c7", color: "#a16207", label: "15% Fee Applied" },
+  non_refundable: { bg: "#fee2e2", color: "#b91c1c", label: "Non-Refundable" },
+  rejected: { bg: "#fee2e2", color: "#dc2626", label: "Rejected" },
 };
 
-const TABS = [
-  { key: '',       label: '📋 All Claims' },
-  { key: 'online', label: '🌐 Online Warranty' },
-  { key: 'walkin', label: '🏪 Walk-in Warranty' },
-];
+const DECISION_STYLE = {
+  pending: { bg: "#fef3c7", color: "#a16207", label: "Pending" },
+  approved: { bg: "#dcfce7", color: "#166534", label: "Approved" },
+  rejected: { bg: "#fee2e2", color: "#dc2626", label: "Rejected" },
+};
 
-export default function WarrantyPage() {
-  const [tab,     setTab]    = useState('');
-  const [rows,    setRows]   = useState([]);
-  const [total,   setTotal]  = useState(0);
-  const [loading, setLoad]   = useState(true);
-  const [filters, setFilters]= useState({ search: '', status: '', from: '', to: '', page: 1 });
-  const [modal,   setModal]  = useState(null); // { row }
+const getChannelMeta = (channel) => {
+  const key = String(channel || "").toLowerCase();
+  return key === "online"
+    ? { label: "Online", bg: "#eff6ff", color: "#2563eb" }
+    : { label: "Walk-in", bg: "#ecfdf5", color: "#15803d" };
+};
 
-  const load = useCallback(async () => {
-    setLoad(true);
+const formatMoney = (value) =>
+  `₱ ${Number(value || 0).toLocaleString("en-PH", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+
+const formatDateTime = (value) => {
+  if (!value) return "—";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "—";
+  return parsed.toLocaleString("en-PH", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+};
+
+const getDecisionStatus = (row) => {
+  const explicit = String(row?.decision_status || "").toLowerCase();
+  if (explicit) return explicit;
+
+  if (row?.approved_by == null) return "pending";
+  if (String(row?.policy_applied || "").toLowerCase() === "rejected")
+    return "rejected";
+  return "approved";
+};
+
+export default function CancellationsPage() {
+  const navigate = useNavigate();
+
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [modal, setModal] = useState(null);
+  const [search, setSearch] = useState("");
+  const [decisionFilter, setDecisionFilter] = useState("");
+
+  const load = async () => {
+    setLoading(true);
     try {
-      const { data } = await api.get('/warranty', {
-        params: { ...filters, type: tab, limit: 20 },
-      });
-      setRows(data.rows);
-      setTotal(data.total);
+      const { data } = await api.get("/orders/cancellations");
+      setRows(Array.isArray(data) ? data : []);
+    } catch (err) {
+      toast.error(
+        err?.response?.data?.message || "Failed to load cancellation requests.",
+      );
     } finally {
-      setLoad(false);
+      setLoading(false);
     }
-  }, [tab, filters]);
+  };
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, []);
 
-  const setF = (k, v) => setFilters(f => ({ ...f, [k]: v, page: 1 }));
+  const filteredRows = useMemo(() => {
+    const term = search.trim().toLowerCase();
 
-  // ── PDF Export ──────────────────────────────────────────────────────────────
-  const exportPDF = () => {
-    const doc      = new jsPDF();
-    const tabLabel = TABS.find(t => t.key === tab)?.label || 'All Claims';
+    return rows.filter((row) => {
+      const decision = getDecisionStatus(row);
 
-    doc.setFontSize(16).setFont('helvetica', 'bold');
-    doc.text('Spiral Wood Services', 105, 14, { align: 'center' });
-    doc.setFontSize(10).setFont('helvetica', 'normal');
-    doc.text('8 Sitio Laot, Prenza 1, Marilao, Bulacan', 105, 20, { align: 'center' });
-    doc.setFontSize(13).setFont('helvetica', 'bold');
-    doc.text(`WARRANTY CLAIMS — ${tabLabel.replace(/[📋🌐🏪]/g, '').trim()}`, 105, 28, { align: 'center' });
-    doc.setFontSize(9).setFont('helvetica', 'normal');
-    doc.text(`Generated: ${new Date().toLocaleString('en-PH')}`, 105, 34, { align: 'center' });
+      const matchesDecision = !decisionFilter || decision === decisionFilter;
 
-    autoTable(doc, {
-      startY: 40,
-      head: [['#', 'Customer', 'Product', 'Reason', 'Channel', 'Expiry', 'Status', 'Date Filed']],
-      body: rows.map((r, i) => [
-        i + 1,
-        r.customer_name,
-        r.product_name,
-        r.reason?.slice(0, 40) + (r.reason?.length > 40 ? '…' : ''),
-        r.order_channel || '—',
-        r.warranty_expiry ? new Date(r.warranty_expiry).toLocaleDateString('en-PH') : '—',
-        r.status,
-        new Date(r.created_at).toLocaleDateString('en-PH'),
-      ]),
-      styles:     { fontSize: 8 },
-      headStyles: { fillColor: [30, 64, 175] },
-      alternateRowStyles: { fillColor: [248, 250, 252] },
+      const haystack = [
+        row.order_number,
+        row.customer_name,
+        row.requested_by_name,
+        row.reason,
+        row.policy_applied,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      const matchesSearch = !term || haystack.includes(term);
+
+      return matchesDecision && matchesSearch;
     });
+  }, [rows, search, decisionFilter]);
 
-    doc.setFontSize(10).setFont('helvetica', 'normal');
-    const finalY = doc.lastAutoTable.finalY + 16;
-    doc.text(`Total Records: ${rows.length}`, 14, finalY);
-    doc.text('___________________________', 14, finalY + 20);
-    doc.text('Authorized Signatory / Owner', 14, finalY + 26);
+  const pageStats = useMemo(() => {
+    const pendingCount = rows.filter(
+      (row) => getDecisionStatus(row) === "pending",
+    ).length;
+    const approvedCount = rows.filter(
+      (row) => getDecisionStatus(row) === "approved",
+    ).length;
+    const rejectedCount = rows.filter(
+      (row) => getDecisionStatus(row) === "rejected",
+    ).length;
+    const totalRefund = rows
+      .filter((row) => getDecisionStatus(row) === "approved")
+      .reduce((sum, row) => sum + Number(row.refund_amount || 0), 0);
 
-    doc.save(`wisdom_warranty_${tab || 'all'}_${Date.now()}.pdf`);
-    toast.success('PDF exported.');
+    return [
+      { label: "Total Requests", value: rows.length },
+      { label: "Pending Review", value: pendingCount },
+      { label: "Approved", value: approvedCount },
+      { label: "Rejected", value: rejectedCount },
+      { label: "Refund Exposure", value: formatMoney(totalRefund) },
+    ];
+  }, [rows]);
+
+  const activeFilterCount = [search, decisionFilter].filter(Boolean).length;
+
+  const handleProcess = async ({ approved, refund_amount, policy_applied }) => {
+    if (!modal?.row?.order_id) return;
+
+    try {
+      await api.post(`/orders/${modal.row.order_id}/cancellation`, {
+        approved,
+        refund_amount,
+        policy_applied,
+      });
+
+      toast.success(
+        approved ? "Cancellation approved." : "Cancellation rejected.",
+      );
+      setModal(null);
+      load();
+    } catch (err) {
+      toast.error(
+        err?.response?.data?.message ||
+          "Failed to process cancellation request.",
+      );
+    }
   };
 
   return (
-    <div>
-      {/* ── Header ────────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+    <div style={pageShell}>
+      <div style={headerBlock}>
         <div>
-          <h1 style={pageTitle}>Warranty Management</h1>
-          <p style={{ fontSize: 13, color: '#64748b', margin: '4px 0 0' }}>
-            Track all warranty claims. 1-year warranty period applies to all completed orders.
+          <div style={eyebrow}>Sales & Orders</div>
+          <h1 style={pageTitle}>Cancellations & Refunds</h1>
+          <p style={pageSubtitle}>
+            Review cancellation requests, apply the correct refund policy, and
+            record the final decision.
           </p>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={exportPDF}       style={btnGhost}>📄 Export PDF</button>
-          <button onClick={() => window.print()} style={btnGhost}>🖨️ Print</button>
+
+        <div style={summaryPill}>{rows.length} total requests</div>
+      </div>
+
+      <div style={statsGrid}>
+        {pageStats.map((stat) => (
+          <div key={stat.label} style={statCard}>
+            <div style={statLabel}>{stat.label}</div>
+            <div style={statValue}>{stat.value}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={policyNote}>
+        <strong>Cancellation Policy:</strong> Standard orders cancelled before
+        shipment → full refund. Custom blueprint orders cancelled after down
+        payment but before contract release → 15% processing fee. After contract
+        release → non-refundable. POS same-day void before leaving premises →
+        full refund.
+      </div>
+
+      <div style={filterCard}>
+        <div style={filterTopRow}>
+          <input
+            placeholder="Search order, customer, requester, or reason..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={{ ...inputBase, ...searchInput }}
+          />
+
+          <select
+            value={decisionFilter}
+            onChange={(e) => setDecisionFilter(e.target.value)}
+            style={{ ...inputBase, minWidth: 170 }}
+          >
+            <option value="">All Decisions</option>
+            <option value="pending">Pending</option>
+            <option value="approved">Approved</option>
+            <option value="rejected">Rejected</option>
+          </select>
+
+          <button
+            onClick={() => {
+              setSearch("");
+              setDecisionFilter("");
+            }}
+            style={btnFilterGhost}
+          >
+            Reset Filters
+          </button>
+        </div>
+
+        <div style={statusTabsRow}>
+          <button
+            onClick={() => setDecisionFilter("")}
+            style={{
+              ...statusTab,
+              background: decisionFilter === "" ? "#0f172a" : "#f8fafc",
+              color: decisionFilter === "" ? "#fff" : "#475569",
+              border:
+                decisionFilter === ""
+                  ? "1px solid #0f172a"
+                  : "1px solid #e2e8f0",
+            }}
+          >
+            All
+          </button>
+
+          {Object.entries(DECISION_STYLE).map(([key, meta]) => (
+            <button
+              key={key}
+              onClick={() => setDecisionFilter(key)}
+              style={{
+                ...statusTab,
+                background: decisionFilter === key ? meta.color : meta.bg,
+                color: decisionFilter === key ? "#fff" : meta.color,
+                border: "none",
+              }}
+            >
+              {meta.label}
+            </button>
+          ))}
+
+          <div style={filtersMeta}>
+            {activeFilterCount > 0
+              ? `${activeFilterCount} active filter(s)`
+              : "No active filters"}
+          </div>
         </div>
       </div>
 
-      {/* ── Tabs ─────────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', gap: 4, borderBottom: '2px solid #e2e8f0', marginBottom: 20 }}>
-        {TABS.map(t => (
-          <button key={t.key} onClick={() => { setTab(t.key); setFilters(f => ({ ...f, page: 1 })); }}
-            style={{
-              padding: '9px 20px', border: 'none', background: 'none', cursor: 'pointer',
-              fontWeight: 600, fontSize: 13,
-              color:        tab === t.key ? '#1e40af' : '#64748b',
-              borderBottom: tab === t.key ? '2px solid #1e40af' : '2px solid transparent',
-              marginBottom: -2,
-            }}
-          >{t.label}</button>
-        ))}
-        <span style={{ marginLeft: 'auto', alignSelf: 'center', fontSize: 12, color: '#94a3b8' }}>
-          {total} claim{total !== 1 ? 's' : ''}
-        </span>
-      </div>
+      <div style={tableCard}>
+        <div style={tableHeader}>
+          <div>
+            <h2 style={tableTitle}>Cancellation Requests</h2>
+            <p style={tableSubtitle}>
+              Live cancellation records from your current system.
+            </p>
+          </div>
+        </div>
 
-      {/* ── Summary badges ───────────────────────────────────────── */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-        {Object.entries(STATUS_STYLE).map(([key, s]) => (
-          <button key={key}
-            onClick={() => setF('status', filters.status === key ? '' : key)}
-            style={{
-              padding: '4px 14px', border: 'none', borderRadius: 20, cursor: 'pointer',
-              fontSize: 11, fontWeight: 600,
-              background: filters.status === key ? s.color : s.bg,
-              color:      filters.status === key ? '#fff'   : s.color,
-            }}
-          >{s.label}</button>
-        ))}
-      </div>
+        <div style={tableWrap}>
+          <table style={table}>
+            <thead>
+              <tr style={theadRow}>
+                {[
+                  "Order",
+                  "Customer",
+                  "Requested By",
+                  "Channel",
+                  "Reason",
+                  "Policy",
+                  "Refund",
+                  "Decision",
+                  "Actions",
+                ].map((header) => (
+                  <th key={header} style={th}>
+                    {header}
+                  </th>
+                ))}
+              </tr>
+            </thead>
 
-      {/* ── Filters ──────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
-        <input
-          placeholder="Search customer or product..."
-          value={filters.search}
-          onChange={e => setF('search', e.target.value)}
-          style={inputSm}
-        />
-        <select value={filters.status} onChange={e => setF('status', e.target.value)} style={inputSm}>
-          <option value="">All Status</option>
-          {Object.entries(STATUS_STYLE).map(([k, s]) => (
-            <option key={k} value={k}>{s.label}</option>
-          ))}
-        </select>
-        <input type="date" value={filters.from} onChange={e => setF('from', e.target.value)} style={inputSm} />
-        <span style={{ alignSelf: 'center', fontSize: 12, color: '#64748b' }}>to</span>
-        <input type="date" value={filters.to}   onChange={e => setF('to',   e.target.value)} style={inputSm} />
-        <button onClick={() => setFilters({ search: '', status: '', from: '', to: '', page: 1 })} style={btnGhost}>
-          Reset
-        </button>
-      </div>
-
-      {/* ── Table ────────────────────────────────────────────────── */}
-      <div style={card}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-          <thead>
-            <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-              {['Customer','Product','Reason','Channel','Proof','Expiry Date','Status','Filed On','Actions'].map(h => (
-                <th key={h} style={th}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr><td colSpan={9} style={centerCell}>Loading warranty claims...</td></tr>
-            ) : rows.length === 0 ? (
-              <tr><td colSpan={9} style={centerCell}>No warranty claims found.</td></tr>
-            ) : rows.map(r => {
-              const ss = STATUS_STYLE[r.status] || { bg: '#f1f5f9', color: '#475569', label: r.status };
-
-              // Expiry warning: red if expired, yellow if within 30 days
-              const expiry      = r.warranty_expiry ? new Date(r.warranty_expiry) : null;
-              const today       = new Date();
-              const daysLeft    = expiry ? Math.ceil((expiry - today) / 86400000) : null;
-              const expiryColor = daysLeft === null ? '#94a3b8'
-                                : daysLeft < 0     ? '#dc2626'
-                                : daysLeft <= 30   ? '#d97706'
-                                :                    '#065f46';
-
-              return (
-                <tr key={r.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                  <td style={td}>
-                    <div style={{ fontWeight: 500 }}>{r.customer_name}</div>
-                    <div style={{ fontSize: 11, color: '#94a3b8' }}>{r.customer_email}</div>
-                  </td>
-                  <td style={{ ...td, maxWidth: 160 }}>
-                    <div style={{ fontWeight: 500 }}>{r.product_name}</div>
-                  </td>
-                  <td style={{ ...td, maxWidth: 180, fontSize: 12, color: '#64748b' }}>
-                    {r.reason?.slice(0, 60)}{r.reason?.length > 60 ? '…' : ''}
-                  </td>
-                  <td style={td}>
-                    <span style={{
-                      background: r.order_channel === 'online' ? '#dbeafe' : '#dcfce7',
-                      color:      r.order_channel === 'online' ? '#1e40af' : '#166534',
-                      padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600,
-                    }}>
-                      {r.order_channel || '—'}
-                    </span>
-                  </td>
-                  <td style={td}>
-                    {r.proof_url
-                      ? <a href={r.proof_url} target="_blank" rel="noreferrer" style={{ color: '#1e40af', fontSize: 12 }}>📎 View</a>
-                      : <span style={{ color: '#94a3b8', fontSize: 12 }}>None</span>
-                    }
-                  </td>
-                  <td style={td}>
-                    {expiry ? (
-                      <div>
-                        <div style={{ color: expiryColor, fontWeight: 600, fontSize: 12 }}>
-                          {expiry.toLocaleDateString('en-PH')}
-                        </div>
-                        <div style={{ fontSize: 11, color: expiryColor }}>
-                          {daysLeft < 0
-                            ? 'Expired'
-                            : daysLeft === 0
-                              ? 'Expires today'
-                              : `${daysLeft}d left`
-                          }
-                        </div>
-                      </div>
-                    ) : '—'}
-                  </td>
-                  <td style={td}>
-                    <span style={{ background: ss.bg, color: ss.color, padding: '2px 10px', borderRadius: 12, fontSize: 11, fontWeight: 600 }}>
-                      {ss.label}
-                    </span>
-                    {r.replacement_receipt && (
-                      <div style={{ marginTop: 4 }}>
-                        <a href={r.replacement_receipt} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: '#1e40af' }}>
-                          📎 Receipt
-                        </a>
-                      </div>
-                    )}
-                  </td>
-                  <td style={{ ...td, fontSize: 12, color: '#64748b' }}>
-                    {new Date(r.created_at).toLocaleDateString('en-PH')}
-                  </td>
-                  <td style={td}>
-                    {r.status === 'pending' && (
-                      <button onClick={() => setModal({ row: r })} style={btnView}>
-                        Review
-                      </button>
-                    )}
-                    {r.status === 'approved' && (
-                      <button onClick={() => setModal({ row: r })} style={{ ...btnView, background: '#d1fae5', color: '#065f46' }}>
-                        Fulfill
-                      </button>
-                    )}
-                    {(r.status === 'rejected' || r.status === 'fulfilled') && (
-                      <span style={{ fontSize: 12, color: '#94a3b8' }}>
-                        {r.fulfilled_by_name ? `by ${r.fulfilled_by_name}` : 'Closed'}
-                      </span>
-                    )}
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan={9} style={emptyCell}>
+                    Loading cancellation requests...
                   </td>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
+              ) : filteredRows.length === 0 ? (
+                <tr>
+                  <td colSpan={9} style={emptyCell}>
+                    No cancellation requests found.
+                  </td>
+                </tr>
+              ) : (
+                filteredRows.map((row) => {
+                  const decision = getDecisionStatus(row);
+                  const decisionMeta =
+                    DECISION_STYLE[decision] || DECISION_STYLE.pending;
 
-        {/* Pagination */}
-        {total > 20 && (
-          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 10, padding: 16 }}>
-            <button disabled={filters.page <= 1}
-              onClick={() => setFilters(f => ({ ...f, page: f.page - 1 }))} style={btnGhost}>← Prev</button>
-            <span style={{ fontSize: 13, color: '#64748b' }}>
-              Page {filters.page} of {Math.ceil(total / 20)}
-            </span>
-            <button disabled={filters.page >= Math.ceil(total / 20)}
-              onClick={() => setFilters(f => ({ ...f, page: f.page + 1 }))} style={btnGhost}>Next →</button>
-          </div>
-        )}
+                  const policyKey =
+                    String(row.policy_applied || "").toLowerCase() ||
+                    (decision === "rejected" ? "rejected" : "");
+
+                  const policyMeta = POLICY_STYLE[policyKey];
+                  const channelMeta = getChannelMeta(row.channel);
+
+                  return (
+                    <tr key={row.id} style={bodyRow}>
+                      <td style={td}>
+                        <button
+                          onClick={() => navigate(`/orders/${row.order_id}`)}
+                          style={orderLink}
+                        >
+                          {row.order_number ||
+                            `#${String(row.order_id).padStart(5, "0")}`}
+                        </button>
+                        <div style={secondaryText}>
+                          Requested {formatDateTime(row.created_at)}
+                        </div>
+                      </td>
+
+                      <td style={td}>
+                        <div style={primaryText}>
+                          {row.customer_name || "Customer"}
+                        </div>
+                        <div style={secondaryText}>
+                          Order #{String(row.order_id).padStart(5, "0")}
+                        </div>
+                      </td>
+
+                      <td style={td}>
+                        <div style={primaryText}>
+                          {row.requested_by_name || "Customer"}
+                        </div>
+                        <div style={secondaryText}>
+                          {row.approved_by_name
+                            ? `Processed by ${row.approved_by_name} · ${formatDateTime(row.approved_at)}`
+                            : "Awaiting admin review"}
+                        </div>
+                      </td>
+
+                      <td style={td}>
+                        <span
+                          style={{
+                            ...pill,
+                            background: channelMeta.bg,
+                            color: channelMeta.color,
+                          }}
+                        >
+                          {channelMeta.label}
+                        </span>
+                      </td>
+
+                      <td style={td}>
+                        <div style={reasonText}>
+                          {row.reason || "No reason provided."}
+                        </div>
+                      </td>
+
+                      <td style={td}>
+                        {policyMeta ? (
+                          <span
+                            style={{
+                              ...pill,
+                              background: policyMeta.bg,
+                              color: policyMeta.color,
+                            }}
+                          >
+                            {policyMeta.label}
+                          </span>
+                        ) : (
+                          <span style={secondaryText}>
+                            {decision === "pending" ? "Pending review" : "—"}
+                          </span>
+                        )}
+                      </td>
+
+                      <td
+                        style={{
+                          ...td,
+                          fontWeight: 700,
+                          color:
+                            Number(row.refund_amount || 0) > 0
+                              ? "#166534"
+                              : "#334155",
+                        }}
+                      >
+                        {Number(row.refund_amount || 0) > 0
+                          ? formatMoney(row.refund_amount)
+                          : "—"}
+                      </td>
+
+                      <td style={td}>
+                        <span
+                          style={{
+                            ...pill,
+                            background: decisionMeta.bg,
+                            color: decisionMeta.color,
+                          }}
+                        >
+                          {decisionMeta.label}
+                        </span>
+                      </td>
+
+                      <td style={td}>
+                        <div style={actionsRow}>
+                          <button
+                            onClick={() => navigate(`/orders/${row.order_id}`)}
+                            style={btnView}
+                          >
+                            View Order
+                          </button>
+
+                          {decision === "pending" && (
+                            <button
+                              onClick={() => setModal({ row })}
+                              style={btnApprove}
+                            >
+                              Process
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      {/* ── Review / Fulfill Modal ───────────────────────────────── */}
       {modal && (
-        <WarrantyModal
+        <ProcessModal
           row={modal.row}
           onClose={() => setModal(null)}
-          onSave={() => { setModal(null); load(); }}
+          onSubmit={handleProcess}
         />
       )}
     </div>
   );
 }
 
-// ── Warranty Action Modal ─────────────────────────────────────────────────────
-function WarrantyModal({ row, onClose, onSave }) {
-  const isPending  = row.status === 'pending';
-  const isApproved = row.status === 'approved';
+function ProcessModal({ row, onClose, onSubmit }) {
+  const initialPolicy = "full_refund";
 
-  const [action,  setAction]  = useState(isPending ? 'approved' : 'fulfilled');
-  const [receipt, setReceipt] = useState(null);
-  const [saving,  setSaving]  = useState(false);
+  const [approved, setApproved] = useState(true);
+  const [policy, setPolicy] = useState(initialPolicy);
+  const [refund, setRefund] = useState(
+    Number(row.total_amount || 0).toFixed(2),
+  );
 
-  const handleSubmit = async () => {
-    setSaving(true);
-    try {
-      const fd = new FormData();
-      fd.append('status', action);
-      if (receipt) fd.append('proof', receipt);
+  const handlePolicyChange = (nextPolicy) => {
+    setPolicy(nextPolicy);
 
-      await api.patch(`/warranty/${row.id}`, fd, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+    const total = Number(row.total_amount || 0);
+
+    if (nextPolicy === "full_refund") setRefund(total.toFixed(2));
+    if (nextPolicy === "processing_fee") setRefund((total * 0.85).toFixed(2));
+    if (nextPolicy === "non_refundable") setRefund("0.00");
+  };
+
+  const handleSubmit = () => {
+    const numericRefund = Number(refund || 0);
+
+    if (approved) {
+      if (Number.isNaN(numericRefund) || numericRefund < 0) {
+        toast.error("Refund amount must be 0 or higher.");
+        return;
+      }
+
+      onSubmit({
+        approved: true,
+        refund_amount: numericRefund,
+        policy_applied: policy,
       });
-
-      toast.success(
-        action === 'approved'  ? 'Warranty claim approved.' :
-        action === 'rejected'  ? 'Warranty claim rejected.' :
-        'Warranty fulfilled. Replacement receipt uploaded.'
-      );
-      onSave();
-    } finally {
-      setSaving(false);
+      return;
     }
+
+    onSubmit({
+      approved: false,
+      refund_amount: 0,
+      policy_applied: "rejected",
+    });
   };
 
   return (
     <div style={overlay}>
       <div style={modalBox}>
-        {/* Claim Summary */}
-        <h3 style={{ margin: '0 0 4px' }}>
-          {isPending ? '🔍 Review Warranty Claim' : '✅ Fulfill Warranty Claim'}
-        </h3>
-        <p style={{ fontSize: 12, color: '#64748b', margin: '0 0 20px' }}>
-          Filed by <strong>{row.customer_name}</strong>
+        <h3 style={modalTitle}>Process Cancellation Request</h3>
+        <p style={modalSubtitle}>
+          {row.order_number ||
+            `Order #${String(row.order_id).padStart(5, "0")}`}{" "}
+          · Total {formatMoney(row.total_amount)}
         </p>
 
-        <div style={{ background: '#f8fafc', borderRadius: 8, padding: '14px 16px', marginBottom: 20 }}>
-          <InfoRow label="Product"      value={row.product_name} />
-          <InfoRow label="Reason"       value={row.reason} />
-          <InfoRow label="Filed On"     value={new Date(row.created_at).toLocaleDateString('en-PH')} />
-          <InfoRow label="Expiry Date"  value={row.warranty_expiry ? new Date(row.warranty_expiry).toLocaleDateString('en-PH') : '—'} />
-          {row.proof_url && (
-            <div style={{ marginTop: 8 }}>
-              <a href={row.proof_url} target="_blank" rel="noreferrer"
-                style={{ fontSize: 12, color: '#1e40af', textDecoration: 'underline' }}>
-                📎 View Customer Proof
-              </a>
-            </div>
-          )}
+        <div style={infoPanel}>
+          <div>
+            <strong>Customer:</strong> {row.customer_name || "Customer"}
+          </div>
+          <div>
+            <strong>Requested by:</strong> {row.requested_by_name || "Customer"}
+          </div>
+          <div>
+            <strong>Requested on:</strong> {formatDateTime(row.created_at)}
+          </div>
+          <div>
+            <strong>Reason:</strong> {row.reason || "No reason provided."}
+          </div>
         </div>
 
-        {/* Action for pending */}
-        {isPending && (
-          <div style={{ marginBottom: 16 }}>
-            <label style={labelSm}>Action</label>
-            <div style={{ display: 'flex', gap: 12 }}>
-              <label style={radioLabel}>
-                <input type="radio" value="approved" checked={action === 'approved'} onChange={() => setAction('approved')} />
-                ✓ Approve Claim
-              </label>
-              <label style={radioLabel}>
-                <input type="radio" value="rejected" checked={action === 'rejected'} onChange={() => setAction('rejected')} />
-                ✕ Reject Claim
-              </label>
-            </div>
-          </div>
-        )}
-
-        {/* Replacement receipt for fulfillment */}
-        {(isApproved || (isPending && action === 'approved')) && (
-          <div style={{ marginBottom: 16 }}>
-            <label style={labelSm}>
-              {isApproved
-                ? 'Upload Replacement Receipt (required to mark as fulfilled) *'
-                : 'Upload Replacement Receipt (optional — or fulfill later)'}
+        <div style={{ marginBottom: 16 }}>
+          <label style={labelSm}>Decision</label>
+          <div style={radioRow}>
+            <label style={radioLabel}>
+              <input
+                type="radio"
+                checked={approved}
+                onChange={() => setApproved(true)}
+              />
+              Approve cancellation
             </label>
-            <input
-              type="file"
-              accept="image/*,.pdf"
-              onChange={e => setReceipt(e.target.files[0])}
-              style={{ fontSize: 13 }}
-            />
-            {isApproved && (
-              <p style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>
-                Uploading a receipt will mark this claim as <strong>Fulfilled</strong>.
-              </p>
-            )}
+
+            <label style={radioLabel}>
+              <input
+                type="radio"
+                checked={!approved}
+                onChange={() => setApproved(false)}
+              />
+              Reject request
+            </label>
+          </div>
+        </div>
+
+        {approved && (
+          <>
+            <div style={{ marginBottom: 14 }}>
+              <label style={labelSm}>Cancellation Policy</label>
+              <select
+                value={policy}
+                onChange={(e) => handlePolicyChange(e.target.value)}
+                style={inputFull}
+              >
+                <option value="full_refund">
+                  Full Refund (before shipment)
+                </option>
+                <option value="processing_fee">15% Processing Fee</option>
+                <option value="non_refundable">Non-Refundable</option>
+              </select>
+            </div>
+
+            <div style={{ marginBottom: 18 }}>
+              <label style={labelSm}>Refund Amount (₱)</label>
+              <input
+                type="number"
+                step="0.01"
+                value={refund}
+                readOnly
+                style={{
+                  ...inputFull,
+                  background: "#f8fafc",
+                  color: "#475569",
+                }}
+              />
+              <div style={helperText}>
+                Preview only. Final refund amount will be enforced by the server
+                based on verified payment records.
+              </div>
+            </div>
+          </>
+        )}
+
+        {!approved && (
+          <div style={rejectNote}>
+            This request will be marked as rejected. The related order will stay
+            in its current status.
           </div>
         )}
 
-        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 20 }}>
-          <button onClick={onClose} style={btnGhost}>Cancel</button>
+        <div style={modalActions}>
+          <button onClick={onClose} style={btnGhost}>
+            Close
+          </button>
           <button
             onClick={handleSubmit}
-            disabled={saving}
-            style={action === 'rejected' ? btnDecline : btnPrimary}
+            style={approved ? btnPrimary : btnDeclineAction}
           >
-            {saving
-              ? 'Saving...'
-              : isApproved
-                ? '✅ Mark as Fulfilled'
-                : action === 'approved'
-                  ? '✓ Approve Claim'
-                  : '✕ Reject Claim'
-            }
+            {approved ? "Approve & Process" : "Reject Request"}
           </button>
         </div>
       </div>
@@ -409,28 +601,437 @@ function WarrantyModal({ row, onClose, onSave }) {
   );
 }
 
-// ── Info Row ──────────────────────────────────────────────────────────────────
-function InfoRow({ label, value }) {
-  return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '1px solid #f1f5f9', fontSize: 13 }}>
-      <span style={{ color: '#64748b', fontWeight: 500 }}>{label}</span>
-      <span style={{ color: '#374151', textAlign: 'right', maxWidth: '60%' }}>{value}</span>
-    </div>
-  );
-}
+const pageShell = {
+  maxWidth: 1180,
+  margin: "0 auto",
+  display: "flex",
+  flexDirection: "column",
+  gap: 12,
+};
 
-// ── Styles ────────────────────────────────────────────────────────────────────
-const pageTitle  = { fontSize: 22, fontWeight: 700, color: '#1e2a38', margin: 0 };
-const card       = { background: '#fff', borderRadius: 12, boxShadow: '0 1px 6px rgba(0,0,0,.08)', overflow: 'hidden' };
-const th         = { textAlign: 'left', padding: '11px 14px', fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' };
-const td         = { padding: '11px 14px', color: '#374151', verticalAlign: 'middle' };
-const centerCell = { textAlign: 'center', padding: 40, color: '#94a3b8' };
-const inputSm    = { padding: '7px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13 };
-const labelSm    = { fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 6 };
-const radioLabel = { display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer', padding: '8px 14px', border: '1px solid #d1d5db', borderRadius: 8 };
-const overlay    = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 };
-const modalBox   = { background: '#fff', borderRadius: 12, padding: 28, width: 500, maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,.3)' };
-const btnPrimary = { padding: '9px 22px', background: '#1e40af', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600 };
-const btnGhost   = { padding: '9px 16px', background: '#f1f5f9', color: '#374151', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13 };
-const btnDecline = { padding: '9px 22px', background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600 };
-const btnView    = { padding: '4px 12px', background: '#e0f2fe', color: '#0369a1', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 12 };
+const headerBlock = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "flex-start",
+  gap: 14,
+  flexWrap: "wrap",
+};
+
+const eyebrow = {
+  fontSize: 11,
+  fontWeight: 700,
+  letterSpacing: "0.14em",
+  textTransform: "uppercase",
+  color: "#64748b",
+  marginBottom: 8,
+};
+
+const pageTitle = {
+  margin: 0,
+  fontSize: 28,
+  lineHeight: 1.1,
+  fontWeight: 700,
+  color: "#0f172a",
+};
+
+const pageSubtitle = {
+  margin: "8px 0 0",
+  color: "#64748b",
+  fontSize: 12,
+  lineHeight: 1.55,
+  maxWidth: 620,
+};
+
+const summaryPill = {
+  background: "#ffffff",
+  border: "1px solid #e2e8f0",
+  borderRadius: 14,
+  padding: "10px 14px",
+  fontSize: 12,
+  fontWeight: 700,
+  color: "#0f172a",
+  boxShadow: "0 8px 20px rgba(15, 23, 42, 0.04)",
+};
+
+const statsGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
+  gap: 12,
+};
+
+const statCard = {
+  background: "#ffffff",
+  border: "1px solid #e2e8f0",
+  borderRadius: 16,
+  padding: "12px 14px",
+  boxShadow: "0 4px 12px rgba(15, 23, 42, 0.028)",
+};
+
+const statLabel = {
+  fontSize: 11,
+  fontWeight: 700,
+  letterSpacing: "0.08em",
+  textTransform: "uppercase",
+  color: "#94a3b8",
+  marginBottom: 8,
+};
+
+const statValue = {
+  fontSize: 22,
+  fontWeight: 700,
+  color: "#0f172a",
+  lineHeight: 1,
+};
+
+const policyNote = {
+  background: "#fffbeb",
+  border: "1px solid #fde68a",
+  borderRadius: 14,
+  padding: "14px 16px",
+  fontSize: 13,
+  lineHeight: 1.6,
+  color: "#92400e",
+};
+
+const filterCard = {
+  background: "#ffffff",
+  border: "1px solid #e2e8f0",
+  borderRadius: 18,
+  padding: 14,
+  boxShadow: "0 8px 22px rgba(15, 23, 42, 0.035)",
+};
+
+const filterTopRow = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: 10,
+  marginBottom: 12,
+};
+
+const inputBase = {
+  height: 40,
+  padding: "0 13px",
+  border: "1px solid #dbe2ea",
+  borderRadius: 10,
+  background: "#fff",
+  fontSize: 12,
+  color: "#0f172a",
+  outline: "none",
+  boxSizing: "border-box",
+};
+
+const searchInput = {
+  flex: "1 1 320px",
+  minWidth: 260,
+};
+
+const btnFilterGhost = {
+  height: 40,
+  padding: "0 14px",
+  border: "1px solid #dbe2ea",
+  borderRadius: 10,
+  background: "#f8fafc",
+  color: "#334155",
+  fontSize: 12,
+  fontWeight: 700,
+  cursor: "pointer",
+};
+
+const statusTabsRow = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  flexWrap: "wrap",
+};
+
+const statusTab = {
+  padding: "7px 11px",
+  borderRadius: 999,
+  fontSize: 11,
+  fontWeight: 700,
+  cursor: "pointer",
+};
+
+const filtersMeta = {
+  marginLeft: "auto",
+  fontSize: 12,
+  color: "#64748b",
+  fontWeight: 600,
+};
+
+const tableCard = {
+  background: "#ffffff",
+  border: "1px solid #e2e8f0",
+  borderRadius: 18,
+  overflow: "hidden",
+  boxShadow: "0 10px 24px rgba(15, 23, 42, 0.04)",
+};
+
+const tableHeader = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 12,
+  padding: "16px 18px 8px",
+};
+
+const tableTitle = {
+  margin: 0,
+  fontSize: 17,
+  fontWeight: 700,
+  color: "#0f172a",
+};
+
+const tableSubtitle = {
+  margin: "4px 0 0",
+  fontSize: 11,
+  color: "#64748b",
+};
+
+const tableWrap = {
+  width: "100%",
+  overflowX: "auto",
+};
+
+const table = {
+  width: "100%",
+  borderCollapse: "separate",
+  borderSpacing: 0,
+  minWidth: 1180,
+};
+
+const theadRow = {
+  background: "#f8fafc",
+};
+
+const th = {
+  textAlign: "left",
+  padding: "12px 14px",
+  fontSize: 10,
+  fontWeight: 700,
+  textTransform: "uppercase",
+  letterSpacing: "0.08em",
+  color: "#64748b",
+  borderBottom: "1px solid #edf2f7",
+};
+
+const td = {
+  padding: "12px 14px",
+  fontSize: 13,
+  color: "#334155",
+  borderBottom: "1px solid #f1f5f9",
+  verticalAlign: "middle",
+};
+
+const bodyRow = {
+  background: "#ffffff",
+};
+
+const emptyCell = {
+  textAlign: "center",
+  padding: "42px 20px",
+  color: "#94a3b8",
+  fontSize: 13,
+};
+
+const orderLink = {
+  background: "none",
+  border: "none",
+  padding: 0,
+  color: "#1d4ed8",
+  fontWeight: 700,
+  fontSize: 13,
+  cursor: "pointer",
+};
+
+const primaryText = {
+  fontSize: 13,
+  fontWeight: 700,
+  color: "#0f172a",
+  marginBottom: 4,
+};
+
+const secondaryText = {
+  fontSize: 12,
+  color: "#94a3b8",
+};
+
+const reasonText = {
+  maxWidth: 240,
+  fontSize: 12,
+  lineHeight: 1.5,
+  color: "#334155",
+};
+
+const pill = {
+  display: "inline-flex",
+  alignItems: "center",
+  padding: "4px 10px",
+  borderRadius: 999,
+  fontSize: 11,
+  fontWeight: 700,
+  whiteSpace: "nowrap",
+};
+
+const actionsRow = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: 8,
+  alignItems: "center",
+};
+
+const btnView = {
+  padding: "6px 12px",
+  borderRadius: 10,
+  border: "1px solid #bfdbfe",
+  background: "#eff6ff",
+  color: "#1d4ed8",
+  fontSize: 12,
+  fontWeight: 700,
+  cursor: "pointer",
+  whiteSpace: "nowrap",
+};
+
+const btnApprove = {
+  padding: "6px 12px",
+  borderRadius: 10,
+  border: "1px solid #a7f3d0",
+  background: "#ecfdf5",
+  color: "#047857",
+  fontSize: 12,
+  fontWeight: 700,
+  cursor: "pointer",
+  whiteSpace: "nowrap",
+};
+
+const overlay = {
+  position: "fixed",
+  inset: 0,
+  background: "rgba(15, 23, 42, 0.45)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  zIndex: 1000,
+  padding: 20,
+};
+
+const modalBox = {
+  width: "100%",
+  maxWidth: 560,
+  background: "#fff",
+  borderRadius: 18,
+  padding: 24,
+  boxShadow: "0 20px 60px rgba(0,0,0,.25)",
+};
+
+const modalTitle = {
+  margin: 0,
+  fontSize: 16,
+  fontWeight: 700,
+  color: "#0f172a",
+};
+
+const modalSubtitle = {
+  margin: "6px 0 18px",
+  fontSize: 13,
+  color: "#64748b",
+};
+
+const infoPanel = {
+  background: "#f8fafc",
+  border: "1px solid #e2e8f0",
+  borderRadius: 12,
+  padding: 14,
+  fontSize: 13,
+  color: "#334155",
+  lineHeight: 1.7,
+  marginBottom: 18,
+};
+
+const labelSm = {
+  fontSize: 12,
+  fontWeight: 700,
+  color: "#374151",
+  display: "block",
+  marginBottom: 8,
+};
+
+const radioRow = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: 18,
+};
+
+const radioLabel = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  fontSize: 13,
+  color: "#334155",
+  cursor: "pointer",
+};
+
+const inputFull = {
+  width: "100%",
+  height: 38,
+  padding: "0 12px",
+  border: "1px solid #d1d5db",
+  borderRadius: 10,
+  fontSize: 13,
+  boxSizing: "border-box",
+};
+
+const helperText = {
+  fontSize: 11,
+  color: "#94a3b8",
+  marginTop: 6,
+};
+
+const rejectNote = {
+  background: "#fef2f2",
+  border: "1px solid #fecaca",
+  borderRadius: 12,
+  padding: 12,
+  fontSize: 13,
+  color: "#b91c1c",
+  marginBottom: 18,
+};
+
+const modalActions = {
+  display: "flex",
+  justifyContent: "flex-end",
+  gap: 10,
+};
+
+const btnGhost = {
+  padding: "10px 16px",
+  background: "#f1f5f9",
+  color: "#374151",
+  border: "none",
+  borderRadius: 10,
+  cursor: "pointer",
+  fontSize: 13,
+  fontWeight: 700,
+};
+
+const btnPrimary = {
+  padding: "10px 16px",
+  background: "#1d4ed8",
+  color: "#fff",
+  border: "none",
+  borderRadius: 10,
+  cursor: "pointer",
+  fontSize: 13,
+  fontWeight: 700,
+};
+
+const btnDeclineAction = {
+  padding: "10px 16px",
+  background: "#dc2626",
+  color: "#fff",
+  border: "none",
+  borderRadius: 10,
+  cursor: "pointer",
+  fontSize: 13,
+  fontWeight: 700,
+};

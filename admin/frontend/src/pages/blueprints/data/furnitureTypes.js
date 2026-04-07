@@ -5,8 +5,6 @@ import { TRIANGLE_TYPES } from "../shapes/triangleShape";
 import { CUBE_TYPES } from "../shapes/cubeShape";
 import { TRAPEZOID_TYPES } from "../shapes/trapezoidShape";
 
-
-
 const CABINET_COMPONENT_TYPES = [
   {
     label: "Upper Cabinet",
@@ -368,11 +366,16 @@ const CHAIR_TEMPLATE_TYPES = [
   {
     label: "Dining Chair Template",
     type: "chair_template",
-    category: "Chair Tools",
+    category: "Furniture Templates",
+    w: 480,
+    h: 950,
+    d: 520,
     fill: "#d9c2a5",
     material: "Oak Wood",
+    unitPrice: 3500,
     blueprintStyle: "chair_template",
     cornerRadius: 0,
+    thumbnailPng: "/library-thumbs/dining-chair-template.png",
   },
 ];
 
@@ -555,51 +558,71 @@ const FURNITURE_TEMPLATE_TYPES = [
     label: "Wooden Dining Table",
     type: "template_dining_table",
     category: "Furniture Templates",
-    fill: "#c69c6d",
+    fill: "#be9366",
     material: "Oak Wood",
-    unitPrice: 16200,
+    unitPrice: 9800,
     blueprintStyle: "assembly_template",
     cornerRadius: 0,
+    thumbnailPng: "/library-thumbs/wooden-dining-table.png",
+    w: 1800,
+    h: 760,
+    d: 900,
   },
   {
     label: "Wooden Bed Frame",
     type: "template_bed_frame",
     category: "Furniture Templates",
-    fill: "#c79d73",
+    fill: "#be9366",
     material: "Oak Wood",
-    unitPrice: 19800,
+    unitPrice: 14500,
     blueprintStyle: "assembly_template",
     cornerRadius: 0,
+    thumbnailPng: "/library-thumbs/wooden-bed-frame.png",
+    w: 2000,
+    h: 1000,
+    d: 1500,
   },
   {
-    label: "Wooden Wardrobe / Cabinet",
-    type: "template_wardrobe",
+    label: "Wooden Wardrobe ",
+    type: "template_closet_wardrobe",
     category: "Furniture Templates",
-    fill: "#8b5e3c",
+    fill: "#b88a5a",
     material: "Plywood + Laminate",
-    unitPrice: 24800,
+    unitPrice: 18500,
     blueprintStyle: "assembly_template",
     cornerRadius: 0,
+    thumbnailPng: "/library-thumbs/wooden-wardrobe-cabinet.png",
+    w: 1800,
+    h: 2200,
+    d: 600,
   },
   {
     label: "Wooden Coffee Table",
     type: "template_coffee_table",
     category: "Furniture Templates",
-    fill: "#8b5a2b",
+    fill: "#8b5e3c",
     material: "Walnut Wood",
-    unitPrice: 7800,
+    unitPrice: 6800,
     blueprintStyle: "assembly_template",
     cornerRadius: 0,
+    thumbnailPng: "/library-thumbs/wooden-coffee-table.png",
+    w: 1200,
+    h: 450,
+    d: 600,
   },
   {
-    label: "Closet / Wardrobe Cabinet",
+    label: "Wardrobe Cabinet",
     type: "template_closet_wardrobe",
     category: "Furniture Templates",
-    fill: "#d2b48c",
+    fill: "#b88a5a",
     material: "Laminated plywood",
-    unitPrice: 0,
+    unitPrice: 18500,
     blueprintStyle: "assembly_template",
     cornerRadius: 0,
+    thumbnailPng: "/library-thumbs/closet-wardrobe-cabinet.png",
+    w: 1800,
+    h: 2200,
+    d: 600,
   },
 ];
 
@@ -613,8 +636,10 @@ const QUICK_LIBRARY_COMPONENTS = [
 ];
 
 const COMPONENT_LIBRARY_GROUPS = [
-  { label: "Furniture Templates", items: FURNITURE_TEMPLATE_TYPES },
-  { label: "Chair Templates", items: CHAIR_TEMPLATE_TYPES },
+  {
+    label: "Furniture Templates",
+    items: [...FURNITURE_TEMPLATE_TYPES, ...CHAIR_TEMPLATE_TYPES],
+  },
   { label: "Chair Parts", items: CHAIR_PART_TYPES },
   {
     label: "Custom Shapes",

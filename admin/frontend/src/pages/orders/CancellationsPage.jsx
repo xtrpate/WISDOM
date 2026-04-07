@@ -1,222 +1,628 @@
-// src/pages/orders/CancellationsPage.jsx – Cancellation & Refund Management
-import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import api from '../../services/api';
-import toast from 'react-hot-toast';
+import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import api from "../../services/api";
+import toast from "react-hot-toast";
 
 const POLICY_STYLE = {
-  full_refund:      { bg: '#d1fae5', color: '#065f46',  label: 'Full Refund' },
-  processing_fee:   { bg: '#fef9c3', color: '#854d0e',  label: '15% Fee Applied' },
-  non_refundable:   { bg: '#fee2e2', color: '#991b1b',  label: 'Non-Refundable' },
-  voided:           { bg: '#e0f2fe', color: '#075985',  label: 'Voided (POS)' },
+  full_refund: { bg: "#dcfce7", color: "#166534", label: "Full Refund" },
+  processing_fee: { bg: "#fef3c7", color: "#a16207", label: "15% Fee Applied" },
+  non_refundable: { bg: "#fee2e2", color: "#b91c1c", label: "Non-Refundable" },
+  rejected: { bg: "#fee2e2", color: "#dc2626", label: "Rejected" },
+};
+
+const DECISION_STYLE = {
+  pending: { bg: "#fef3c7", color: "#a16207", label: "Pending" },
+  approved: { bg: "#dcfce7", color: "#166534", label: "Approved" },
+  rejected: { bg: "#fee2e2", color: "#dc2626", label: "Rejected" },
+};
+
+const normalize = (value) =>
+  String(value || "")
+    .trim()
+    .toLowerCase();
+
+const getChannelMeta = (channel) => {
+  const key = normalize(channel);
+  return key === "online"
+    ? { label: "Online", bg: "#eff6ff", color: "#2563eb" }
+    : { label: "Walk-in", bg: "#ecfdf5", color: "#15803d" };
+};
+
+const formatMoney = (value) =>
+  `₱ ${Number(value || 0).toLocaleString("en-PH", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+
+const formatDateTime = (value) => {
+  if (!value) return "—";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "—";
+  return parsed.toLocaleString("en-PH", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+};
+
+const getDecisionStatus = (row) => {
+  const explicit = normalize(row?.decision_status);
+  if (explicit) return explicit;
+
+  if (row?.approved_by == null) return "pending";
+  if (normalize(row?.policy_applied) === "rejected") return "rejected";
+  return "approved";
 };
 
 export default function CancellationsPage() {
-  const navigate            = useNavigate();
-  const [rows,     setRows] = useState([]);
-  const [loading,  setLoad] = useState(true);
-  const [modal,    setModal]= useState(null); // { row }
+  const navigate = useNavigate();
+
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [modal, setModal] = useState(null);
+  const [search, setSearch] = useState("");
+  const [decisionFilter, setDecisionFilter] = useState("");
+  const [showPolicy, setShowPolicy] = useState(false);
 
   const load = async () => {
-    setLoad(true);
+    setLoading(true);
     try {
-      const { data } = await api.get('/orders/cancellations');
-      setRows(data);
+      const { data } = await api.get("/orders/cancellations");
+      setRows(Array.isArray(data) ? data : []);
+    } catch (err) {
+      toast.error(
+        err?.response?.data?.message || "Failed to load cancellation requests.",
+      );
     } finally {
-      setLoad(false);
+      setLoading(false);
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+  }, []);
+
+  const filteredRows = useMemo(() => {
+    const term = normalize(search);
+
+    return rows.filter((row) => {
+      const decision = getDecisionStatus(row);
+      const haystack = [
+        row.order_number,
+        row.customer_name,
+        row.requested_by_name,
+        row.reason,
+        row.policy_applied,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return (
+        (!decisionFilter || decision === decisionFilter) &&
+        (!term || haystack.includes(term))
+      );
+    });
+  }, [rows, search, decisionFilter]);
+
+  const stats = useMemo(() => {
+    const pending = rows.filter(
+      (row) => getDecisionStatus(row) === "pending",
+    ).length;
+    const approved = rows.filter(
+      (row) => getDecisionStatus(row) === "approved",
+    ).length;
+    const rejected = rows.filter(
+      (row) => getDecisionStatus(row) === "rejected",
+    ).length;
+    const refundExposure = rows
+      .filter((row) => getDecisionStatus(row) === "approved")
+      .reduce((sum, row) => sum + Number(row.refund_amount || 0), 0);
+
+    return [
+      { label: "Total Requests", value: rows.length },
+      { label: "Pending Review", value: pending },
+      { label: "Approved", value: approved },
+      { label: "Rejected", value: rejected },
+      { label: "Refund Exposure", value: formatMoney(refundExposure) },
+    ];
+  }, [rows]);
 
   const handleProcess = async ({ approved, refund_amount, policy_applied }) => {
+    if (!modal?.row?.order_id) return;
+
     try {
       await api.post(`/orders/${modal.row.order_id}/cancellation`, {
         approved,
         refund_amount,
         policy_applied,
       });
-      toast.success(approved ? 'Cancellation approved.' : 'Cancellation rejected.');
+
+      toast.success(
+        approved ? "Cancellation approved." : "Cancellation rejected.",
+      );
       setModal(null);
       load();
-    } catch {}
+    } catch (err) {
+      toast.error(
+        err?.response?.data?.message ||
+          "Failed to process cancellation request.",
+      );
+    }
   };
 
   return (
-    <div>
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+    <div style={pageShell}>
+      <div style={headerBlock}>
         <div>
+          <div style={eyebrow}>Sales & Orders</div>
           <h1 style={pageTitle}>Cancellations & Refunds</h1>
-          <p style={{ fontSize: 13, color: '#64748b', margin: '4px 0 0' }}>
-            Review and process customer cancellation requests.
+          <p style={pageSubtitle}>
+            Keep review decisions clean, consistent, and tied to the server-side
+            refund policy.
           </p>
+        </div>
+
+        <div style={summaryPill}>{rows.length} total requests</div>
+      </div>
+
+      <div style={statsGrid}>
+        {stats.map((item) => (
+          <div key={item.label} style={statCard}>
+            <div style={statLabel}>{item.label}</div>
+            <div style={statValue}>{item.value}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={infoCard}>
+        <div style={infoHeader}>
+          <div>
+            <div style={infoTitle}>Cancellation policy guide</div>
+            <div style={infoSubtitle}>
+              Show only when needed instead of always taking vertical space.
+            </div>
+          </div>
+
+          <button
+            onClick={() => setShowPolicy((prev) => !prev)}
+            style={btnGhost}
+          >
+            {showPolicy ? "Hide Policy" : "View Policy"}
+          </button>
+        </div>
+
+        {showPolicy && (
+          <div style={policyBody}>
+            <div>
+              • Standard orders cancelled before shipment → full refund.
+            </div>
+            <div>
+              • Custom blueprint orders after down payment but before contract
+              release → 15% processing fee.
+            </div>
+            <div>• After contract release → non-refundable.</div>
+            <div>
+              • POS same-day void before the item leaves the premises → full
+              refund.
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div style={filterCard}>
+        <div style={filterTopRow}>
+          <input
+            placeholder="Search order, customer, requester, or reason..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={{ ...inputBase, ...searchInput }}
+          />
+
+          <select
+            value={decisionFilter}
+            onChange={(e) => setDecisionFilter(e.target.value)}
+            style={{ ...inputBase, minWidth: 180 }}
+          >
+            <option value="">All Decisions</option>
+            <option value="pending">Pending</option>
+            <option value="approved">Approved</option>
+            <option value="rejected">Rejected</option>
+          </select>
+
+          <button
+            onClick={() => {
+              setSearch("");
+              setDecisionFilter("");
+            }}
+            style={btnGhost}
+          >
+            Reset
+          </button>
+        </div>
+
+        <div style={statusRow}>
+          <button
+            type="button"
+            onClick={() => setDecisionFilter("")}
+            style={{
+              ...statusChip,
+              background: decisionFilter ? "#f8fafc" : "#0f172a",
+              color: decisionFilter ? "#475569" : "#ffffff",
+              borderColor: decisionFilter ? "#e2e8f0" : "#0f172a",
+            }}
+          >
+            All
+          </button>
+
+          {Object.entries(DECISION_STYLE).map(([key, meta]) => {
+            const isActive = decisionFilter === key;
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setDecisionFilter(key)}
+                style={{
+                  ...statusChip,
+                  background: isActive ? meta.color : meta.bg,
+                  color: isActive ? "#ffffff" : meta.color,
+                  borderColor: isActive ? meta.color : "transparent",
+                }}
+              >
+                {meta.label}
+              </button>
+            );
+          })}
+
+          <div style={filtersMeta}>
+            {search || decisionFilter
+              ? "Filtered view"
+              : "Showing all requests"}
+          </div>
         </div>
       </div>
 
-      {/* Policy Reference */}
-      <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '12px 16px', marginBottom: 20, fontSize: 13, color: '#92400e' }}>
-        <strong>Cancellation Policy:</strong>&nbsp;
-        Standard orders cancelled before shipment → Full Refund. &nbsp;|&nbsp;
-        Custom blueprint orders cancelled after down payment but before contract release → 15% processing fee deducted. &nbsp;|&nbsp;
-        After contract release → Non-refundable. &nbsp;|&nbsp;
-        POS same-day void before leaving premises → Full Refund.
-      </div>
+      <div style={tableCard}>
+        <div style={tableHeader}>
+          <div>
+            <h2 style={tableTitle}>Cancellation Requests</h2>
+            <p style={tableSubtitle}>
+              Use the table for scanning, then open a single request only when
+              you need to process it.
+            </p>
+          </div>
+        </div>
 
-      {/* Table */}
-      <div style={card}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-          <thead>
-            <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-              {['Order','Customer','Channel','Order Total','Policy','Refund Amt','Requested By','Status','Actions'].map(h => (
-                <th key={h} style={th}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr><td colSpan={9} style={centerCell}>Loading...</td></tr>
-            ) : rows.length === 0 ? (
-              <tr><td colSpan={9} style={centerCell}>No cancellation requests found.</td></tr>
-            ) : rows.map(r => {
-              const p  = POLICY_STYLE[r.policy_applied] || { bg: '#f1f5f9', color: '#475569', label: r.policy_applied || '—' };
-              const approved = r.approved_by !== null;
-              return (
-                <tr key={r.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                  <td style={td}>
-                    <button onClick={() => navigate(`/orders/${r.order_id}`)} style={linkBtn}>
-                      #{String(r.order_id).padStart(5, '0')}
-                    </button>
-                  </td>
-                  <td style={td}>{r.requested_by_name || '—'}</td>
-                  <td style={td}>
-                    <span style={{
-                      background: r.channel === 'online' ? '#dbeafe' : '#dcfce7',
-                      color:      r.channel === 'online' ? '#1e40af' : '#166534',
-                      padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600,
-                    }}>
-                      {r.channel || '—'}
-                    </span>
-                  </td>
-                  <td style={{ ...td, fontWeight: 600 }}>
-                    ₱ {Number(r.total_amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
-                  </td>
-                  <td style={td}>
-                    {r.policy_applied
-                      ? <span style={{ background: p.bg, color: p.color, padding: '2px 10px', borderRadius: 12, fontSize: 11, fontWeight: 600 }}>{p.label}</span>
-                      : <span style={{ color: '#94a3b8', fontSize: 12 }}>Pending review</span>
-                    }
-                  </td>
-                  <td style={td}>
-                    {r.refund_amount > 0
-                      ? <span style={{ color: '#065f46', fontWeight: 600 }}>₱ {Number(r.refund_amount).toFixed(2)}</span>
-                      : '—'
-                    }
-                  </td>
-                  <td style={td}>{r.requested_by_name || '—'}</td>
-                  <td style={td}>
-                    {approved
-                      ? <span style={{ background: '#d1fae5', color: '#065f46', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600 }}>Approved</span>
-                      : <span style={{ background: '#fef9c3', color: '#854d0e', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600 }}>Pending</span>
-                    }
-                  </td>
-                  <td style={td}>
-                    {!approved && (
-                      <button onClick={() => setModal({ row: r })} style={btnView}>Process</button>
-                    )}
-                    {approved && (
-                      <span style={{ fontSize: 12, color: '#64748b' }}>
-                        by {r.approved_by_name || 'Admin'}
-                      </span>
-                    )}
+        <div style={tableWrap}>
+          <table style={table}>
+            <thead>
+              <tr style={theadRow}>
+                {[
+                  "Order",
+                  "Customer",
+                  "Requested By",
+                  "Channel",
+                  "Reason",
+                  "Policy",
+                  "Refund",
+                  "Decision",
+                  "Actions",
+                ].map((label) => (
+                  <th key={label} style={th}>
+                    {label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan={9} style={emptyCell}>
+                    Loading cancellation requests...
                   </td>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
+              ) : filteredRows.length === 0 ? (
+                <tr>
+                  <td colSpan={9} style={emptyCell}>
+                    <div style={emptyState}>
+                      <div style={emptyStateTitle}>
+                        No cancellation requests found
+                      </div>
+                      <div style={emptyStateText}>
+                        New requests will appear here after customers submit a
+                        cancellation or refund request.
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                filteredRows.map((row) => {
+                  const decision = getDecisionStatus(row);
+                  const decisionMeta =
+                    DECISION_STYLE[decision] || DECISION_STYLE.pending;
+                  const policyKey =
+                    normalize(row.policy_applied) ||
+                    (decision === "rejected" ? "rejected" : "");
+                  const policyMeta = POLICY_STYLE[policyKey];
+                  const channelMeta = getChannelMeta(row.channel);
+
+                  return (
+                    <tr key={row.id} style={tbodyRow}>
+                      <td style={td}>
+                        <button
+                          onClick={() => navigate(`/orders/${row.order_id}`)}
+                          style={orderLink}
+                        >
+                          {row.order_number ||
+                            `#${String(row.order_id).padStart(5, "0")}`}
+                        </button>
+                        <div style={secondaryText}>
+                          Requested {formatDateTime(row.created_at)}
+                        </div>
+                      </td>
+
+                      <td style={td}>
+                        <div style={primaryText}>
+                          {row.customer_name || "Customer"}
+                        </div>
+                        <div style={secondaryText}>
+                          Order #{String(row.order_id).padStart(5, "0")}
+                        </div>
+                      </td>
+
+                      <td style={td}>
+                        <div style={primaryText}>
+                          {row.requested_by_name || "Customer"}
+                        </div>
+                        <div style={secondaryText}>
+                          {row.approved_by_name
+                            ? `Processed by ${row.approved_by_name}`
+                            : "Awaiting admin review"}
+                        </div>
+                      </td>
+
+                      <td style={td}>
+                        <span
+                          style={{
+                            ...softBadge,
+                            background: channelMeta.bg,
+                            color: channelMeta.color,
+                          }}
+                        >
+                          {channelMeta.label}
+                        </span>
+                      </td>
+
+                      <td style={td}>
+                        <div style={reasonText}>
+                          {row.reason || "No reason provided."}
+                        </div>
+                      </td>
+
+                      <td style={td}>
+                        {policyMeta ? (
+                          <span
+                            style={{
+                              ...softBadge,
+                              background: policyMeta.bg,
+                              color: policyMeta.color,
+                            }}
+                          >
+                            {policyMeta.label}
+                          </span>
+                        ) : (
+                          <span style={secondaryText}>Pending review</span>
+                        )}
+                      </td>
+
+                      <td
+                        style={{
+                          ...td,
+                          fontWeight: 700,
+                          color:
+                            Number(row.refund_amount || 0) > 0
+                              ? "#166534"
+                              : "#334155",
+                        }}
+                      >
+                        {Number(row.refund_amount || 0) > 0
+                          ? formatMoney(row.refund_amount)
+                          : "—"}
+                      </td>
+
+                      <td style={td}>
+                        <span
+                          style={{
+                            ...softBadge,
+                            background: decisionMeta.bg,
+                            color: decisionMeta.color,
+                          }}
+                        >
+                          {decisionMeta.label}
+                        </span>
+                      </td>
+
+                      <td style={td}>
+                        <div style={actionsRow}>
+                          <button
+                            onClick={() => navigate(`/orders/${row.order_id}`)}
+                            style={btnView}
+                          >
+                            View order
+                          </button>
+
+                          {decision === "pending" && (
+                            <button
+                              onClick={() => setModal({ row })}
+                              style={btnApprove}
+                            >
+                              Process
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      {/* Process Modal */}
-      {modal && <ProcessModal row={modal.row} onClose={() => setModal(null)} onSubmit={handleProcess} />}
+      {modal && (
+        <ProcessModal
+          row={modal.row}
+          onClose={() => setModal(null)}
+          onSubmit={handleProcess}
+        />
+      )}
     </div>
   );
 }
 
-// ── Process Cancellation Modal ────────────────────────────────────────────────
 function ProcessModal({ row, onClose, onSubmit }) {
-  const [policy,  setPolicy]  = useState('full_refund');
-  const [refund,  setRefund]  = useState(Number(row.total_amount || 0).toFixed(2));
   const [approved, setApproved] = useState(true);
+  const [policy, setPolicy] = useState("full_refund");
+  const [refund, setRefund] = useState(
+    Number(row.total_amount || 0).toFixed(2),
+  );
 
-  // Auto-calculate refund based on policy
-  const handlePolicyChange = (p) => {
-    setPolicy(p);
+  const handlePolicyChange = (nextPolicy) => {
+    setPolicy(nextPolicy);
+
     const total = Number(row.total_amount || 0);
-    if (p === 'full_refund')    setRefund(total.toFixed(2));
-    if (p === 'processing_fee') setRefund((total * 0.85).toFixed(2));
-    if (p === 'non_refundable') setRefund('0.00');
-    if (p === 'voided')         setRefund(total.toFixed(2));
+
+    if (nextPolicy === "full_refund") setRefund(total.toFixed(2));
+    if (nextPolicy === "processing_fee") setRefund((total * 0.85).toFixed(2));
+    if (nextPolicy === "non_refundable") setRefund("0.00");
+  };
+
+  const handleSubmit = () => {
+    const numericRefund = Number(refund || 0);
+
+    if (approved) {
+      if (Number.isNaN(numericRefund) || numericRefund < 0) {
+        toast.error("Refund amount must be 0 or higher.");
+        return;
+      }
+
+      onSubmit({
+        approved: true,
+        refund_amount: numericRefund,
+        policy_applied: policy,
+      });
+      return;
+    }
+
+    onSubmit({
+      approved: false,
+      refund_amount: 0,
+      policy_applied: "rejected",
+    });
   };
 
   return (
     <div style={overlay}>
-      <div style={{ ...modalBox, width: 480 }}>
-        <h3 style={{ margin: '0 0 6px' }}>Process Cancellation Request</h3>
-        <p style={{ fontSize: 12, color: '#64748b', margin: '0 0 20px' }}>
-          Order #{String(row.order_id).padStart(5,'0')} — Total: ₱ {Number(row.total_amount||0).toFixed(2)}
+      <div style={modalBox}>
+        <h3 style={modalTitle}>Process Cancellation Request</h3>
+        <p style={modalSubtitle}>
+          {row.order_number ||
+            `Order #${String(row.order_id).padStart(5, "0")}`}{" "}
+          · Total {formatMoney(row.total_amount)}
         </p>
 
-        {row.reason && (
-          <div style={{ background: '#fef9c3', borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 13, color: '#92400e' }}>
-            <strong>Customer reason:</strong> {row.reason}
+        <div style={infoPanel}>
+          <div>
+            <strong>Customer:</strong> {row.customer_name || "Customer"}
           </div>
-        )}
+          <div>
+            <strong>Requested by:</strong> {row.requested_by_name || "Customer"}
+          </div>
+          <div>
+            <strong>Requested on:</strong> {formatDateTime(row.created_at)}
+          </div>
+          <div>
+            <strong>Reason:</strong> {row.reason || "No reason provided."}
+          </div>
+        </div>
 
-        <div style={{ marginBottom: 14 }}>
-          <label style={labelSm}>Approval Decision</label>
-          <div style={{ display: 'flex', gap: 10 }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer' }}>
-              <input type="radio" checked={approved}  onChange={() => setApproved(true)}  /> Approve Cancellation
+        <div style={{ marginBottom: 16 }}>
+          <label style={labelSm}>Decision</label>
+          <div style={radioRow}>
+            <label style={radioLabel}>
+              <input
+                type="radio"
+                checked={approved}
+                onChange={() => setApproved(true)}
+              />
+              Approve cancellation
             </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer' }}>
-              <input type="radio" checked={!approved} onChange={() => setApproved(false)} /> Reject Request
+
+            <label style={radioLabel}>
+              <input
+                type="radio"
+                checked={!approved}
+                onChange={() => setApproved(false)}
+              />
+              Reject request
             </label>
           </div>
         </div>
 
-        {approved && (
+        {approved ? (
           <>
             <div style={{ marginBottom: 14 }}>
-              <label style={labelSm}>Cancellation Policy to Apply</label>
-              <select value={policy} onChange={e => handlePolicyChange(e.target.value)} style={inputFull}>
-                <option value="full_refund">Full Refund (before shipment)</option>
-                <option value="processing_fee">15% Processing Fee (after down payment)</option>
-                <option value="non_refundable">Non-Refundable (after contract release)</option>
-                <option value="voided">Voided — POS Same-day</option>
+              <label style={labelSm}>Cancellation Policy</label>
+              <select
+                value={policy}
+                onChange={(e) => handlePolicyChange(e.target.value)}
+                style={inputFull}
+              >
+                <option value="full_refund">Full Refund</option>
+                <option value="processing_fee">15% Processing Fee</option>
+                <option value="non_refundable">Non-Refundable</option>
               </select>
             </div>
-            <div style={{ marginBottom: 20 }}>
+
+            <div style={{ marginBottom: 18 }}>
               <label style={labelSm}>Refund Amount (₱)</label>
               <input
-                type="number" step="0.01" value={refund}
-                onChange={e => setRefund(e.target.value)}
-                style={inputFull}
+                type="number"
+                step="0.01"
+                value={refund}
+                readOnly
+                style={{
+                  ...inputFull,
+                  background: "#f8fafc",
+                  color: "#475569",
+                }}
               />
-              <p style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>
-                Auto-calculated based on policy. Adjust manually if needed.
-              </p>
+              <div style={helperText}>
+                Preview only. Final refund amount is still validated and
+                enforced by the backend.
+              </div>
             </div>
           </>
+        ) : (
+          <div style={rejectNote}>
+            This request will be marked as rejected. The related order will stay
+            in its current status.
+          </div>
         )}
 
-        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-          <button onClick={onClose} style={btnGhost}>Cancel</button>
+        <div style={modalActions}>
+          <button onClick={onClose} style={btnGhost}>
+            Close
+          </button>
           <button
-            onClick={() => onSubmit({ approved, refund_amount: refund, policy_applied: policy })}
-            style={approved ? btnPrimary : btnDecline}
+            onClick={handleSubmit}
+            style={approved ? btnPrimary : btnDeclineAction}
           >
-            {approved ? 'Approve & Process' : 'Reject Request'}
+            {approved ? "Approve & Process" : "Reject Request"}
           </button>
         </div>
       </div>
@@ -224,18 +630,471 @@ function ProcessModal({ row, onClose, onSubmit }) {
   );
 }
 
-// ── Styles ────────────────────────────────────────────────────────────────────
-const pageTitle = { fontSize: 22, fontWeight: 700, color: '#1e2a38', margin: 0 };
-const card      = { background: '#fff', borderRadius: 12, boxShadow: '0 1px 6px rgba(0,0,0,.08)', overflow: 'hidden' };
-const th        = { textAlign: 'left', padding: '11px 14px', fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' };
-const td        = { padding: '11px 14px', color: '#374151', verticalAlign: 'middle' };
-const centerCell= { textAlign: 'center', padding: 40, color: '#94a3b8' };
-const labelSm   = { fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 6 };
-const inputFull = { width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13, boxSizing: 'border-box' };
-const overlay   = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 };
-const modalBox  = { background: '#fff', borderRadius: 12, padding: 28, boxShadow: '0 20px 60px rgba(0,0,0,.3)' };
-const btnPrimary= { padding: '8px 20px', background: '#1e40af', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600 };
-const btnGhost  = { padding: '8px 20px', background: '#f1f5f9', color: '#374151', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13 };
-const btnView   = { padding: '4px 12px', background: '#e0f2fe', color: '#0369a1', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 12 };
-const btnDecline= { padding: '8px 20px', background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600 };
-const linkBtn   = { background: 'none', border: 'none', color: '#1e40af', fontWeight: 600, cursor: 'pointer', fontSize: 13 };
+const pageShell = {
+  maxWidth: 1180,
+  margin: "0 auto",
+  display: "flex",
+  flexDirection: "column",
+  gap: 12,
+};
+
+const headerBlock = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "flex-start",
+  gap: 14,
+  flexWrap: "wrap",
+};
+
+const eyebrow = {
+  fontSize: 10,
+  fontWeight: 700,
+  letterSpacing: "0.14em",
+  textTransform: "uppercase",
+  color: "#64748b",
+  marginBottom: 8,
+};
+
+const pageTitle = {
+  margin: 0,
+  fontSize: 22,
+  lineHeight: 1.1,
+  fontWeight: 700,
+  color: "#0f172a",
+};
+
+const pageSubtitle = {
+  margin: "8px 0 0",
+  color: "#64748b",
+  fontSize: 12,
+  lineHeight: 1.55,
+};
+
+const summaryPill = {
+  background: "#ffffff",
+  border: "1px solid #e2e8f0",
+  borderRadius: 14,
+  padding: "10px 14px",
+  fontSize: 12,
+  fontWeight: 700,
+  color: "#0f172a",
+  boxShadow: "0 6px 18px rgba(15, 23, 42, 0.04)",
+};
+
+const statsGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+  gap: 12,
+};
+
+const statCard = {
+  background: "#ffffff",
+  border: "1px solid #e2e8f0",
+  borderRadius: 16,
+  padding: "12px 14px",
+  boxShadow: "0 4px 12px rgba(15, 23, 42, 0.028)",
+};
+
+const statLabel = {
+  fontSize: 10,
+  fontWeight: 700,
+  letterSpacing: "0.08em",
+  textTransform: "uppercase",
+  color: "#94a3b8",
+  marginBottom: 8,
+};
+
+const statValue = {
+  fontSize: 22,
+  fontWeight: 700,
+  color: "#0f172a",
+  lineHeight: 1,
+};
+
+const infoCard = {
+  background: "#ffffff",
+  border: "1px solid #e2e8f0",
+  borderRadius: 18,
+  padding: 12,
+  boxShadow: "0 6px 18px rgba(15, 23, 42, 0.028)",
+};
+
+const infoHeader = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 12,
+  flexWrap: "wrap",
+};
+
+const infoTitle = {
+  fontSize: 14,
+  fontWeight: 700,
+  color: "#0f172a",
+};
+
+const infoSubtitle = {
+  marginTop: 4,
+  fontSize: 12,
+  color: "#64748b",
+};
+
+const policyBody = {
+  marginTop: 12,
+  display: "grid",
+  gap: 8,
+  padding: "12px 14px",
+  borderRadius: 14,
+  background: "#fffbeb",
+  border: "1px solid #fde68a",
+  color: "#92400e",
+  fontSize: 13,
+  lineHeight: 1.6,
+};
+
+const filterCard = {
+  background: "#ffffff",
+  border: "1px solid #e2e8f0",
+  borderRadius: 18,
+  padding: 12,
+  boxShadow: "0 6px 18px rgba(15, 23, 42, 0.028)",
+};
+
+const filterTopRow = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: 10,
+  marginBottom: 12,
+};
+
+const inputBase = {
+  height: 38,
+  borderRadius: 12,
+  border: "1px solid #cbd5e1",
+  background: "#ffffff",
+  padding: "0 14px",
+  fontSize: 13,
+  color: "#0f172a",
+  outline: "none",
+};
+
+const searchInput = {
+  flex: "1 1 320px",
+  minWidth: 260,
+};
+
+const statusRow = {
+  display: "flex",
+  gap: 8,
+  flexWrap: "wrap",
+  alignItems: "center",
+};
+
+const statusChip = {
+  padding: "6px 12px",
+  borderRadius: 999,
+  border: "1px solid transparent",
+  fontSize: 10,
+  fontWeight: 700,
+  cursor: "pointer",
+};
+
+const filtersMeta = {
+  marginLeft: "auto",
+  fontSize: 12,
+  color: "#64748b",
+};
+
+const tableCard = {
+  background: "#ffffff",
+  border: "1px solid #e2e8f0",
+  borderRadius: 18,
+  overflow: "hidden",
+  boxShadow: "0 8px 22px rgba(15, 23, 42, 0.035)",
+};
+
+const tableHeader = {
+  padding: "16px 18px 10px",
+  borderBottom: "1px solid #eef2f7",
+};
+
+const tableTitle = {
+  margin: 0,
+  fontSize: 16,
+  fontWeight: 700,
+  color: "#0f172a",
+};
+
+const tableSubtitle = {
+  margin: "4px 0 0",
+  fontSize: 12,
+  color: "#64748b",
+};
+
+const tableWrap = {
+  width: "100%",
+  overflowX: "auto",
+};
+
+const table = {
+  width: "100%",
+  borderCollapse: "collapse",
+  minWidth: 920,
+};
+
+const theadRow = {
+  background: "#f8fafc",
+};
+
+const th = {
+  padding: "12px 14px",
+  textAlign: "left",
+  fontSize: 10,
+  fontWeight: 700,
+  textTransform: "uppercase",
+  letterSpacing: "0.08em",
+  color: "#64748b",
+  borderBottom: "1px solid #e2e8f0",
+};
+
+const tbodyRow = {
+  background: "#ffffff",
+};
+
+const td = {
+  padding: "14px",
+  fontSize: 13,
+  color: "#334155",
+  borderBottom: "1px solid #f1f5f9",
+  verticalAlign: "middle",
+};
+
+const orderLink = {
+  background: "none",
+  border: "none",
+  color: "#1d4ed8",
+  padding: 0,
+  fontSize: 13,
+  fontWeight: 700,
+  cursor: "pointer",
+};
+
+const primaryText = {
+  fontSize: 13,
+  fontWeight: 700,
+  color: "#0f172a",
+};
+
+const secondaryText = {
+  marginTop: 4,
+  fontSize: 11,
+  color: "#94a3b8",
+};
+
+const reasonText = {
+  maxWidth: 240,
+  fontSize: 12,
+  lineHeight: 1.55,
+  color: "#475569",
+};
+
+const softBadge = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "4px 10px",
+  borderRadius: 999,
+  fontSize: 10,
+  fontWeight: 700,
+  whiteSpace: "nowrap",
+};
+
+const actionsRow = {
+  display: "flex",
+  gap: 8,
+  flexWrap: "wrap",
+};
+
+const btnView = {
+  padding: "8px 12px",
+  borderRadius: 10,
+  border: "1px solid #bfdbfe",
+  background: "#eff6ff",
+  color: "#1d4ed8",
+  fontSize: 12,
+  fontWeight: 700,
+  cursor: "pointer",
+};
+
+const btnApprove = {
+  padding: "8px 12px",
+  borderRadius: 10,
+  border: "1px solid #a7f3d0",
+  background: "#ecfdf5",
+  color: "#047857",
+  fontSize: 12,
+  fontWeight: 700,
+  cursor: "pointer",
+};
+
+const btnGhost = {
+  padding: "9px 12px",
+  borderRadius: 10,
+  border: "1px solid #cbd5e1",
+  background: "#ffffff",
+  color: "#334155",
+  fontSize: 12,
+  fontWeight: 700,
+  cursor: "pointer",
+};
+
+const btnPrimary = {
+  padding: "10px 14px",
+  borderRadius: 10,
+  border: "1px solid #1d4ed8",
+  background: "#1d4ed8",
+  color: "#ffffff",
+  fontSize: 12,
+  fontWeight: 700,
+  cursor: "pointer",
+};
+
+const emptyCell = {
+  padding: 28,
+  textAlign: "center",
+  color: "#64748b",
+  fontSize: 13,
+};
+
+const emptyState = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 4,
+  alignItems: "center",
+};
+
+const emptyStateTitle = {
+  fontWeight: 700,
+  color: "#0f172a",
+};
+
+const emptyStateText = {
+  maxWidth: 420,
+  lineHeight: 1.55,
+};
+
+const overlay = {
+  position: "fixed",
+  inset: 0,
+  background: "rgba(15, 23, 42, 0.45)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  zIndex: 1000,
+  padding: 20,
+};
+
+const modalBox = {
+  background: "#fff",
+  borderRadius: 18,
+  padding: 20,
+  width: 500,
+  maxWidth: "100%",
+  boxShadow: "0 25px 60px rgba(15, 23, 42, 0.28)",
+};
+
+const modalTitle = {
+  margin: 0,
+  fontSize: 18,
+  fontWeight: 700,
+  color: "#0f172a",
+};
+
+const modalSubtitle = {
+  margin: "6px 0 16px",
+  fontSize: 12,
+  color: "#64748b",
+};
+
+const infoPanel = {
+  background: "#f8fafc",
+  border: "1px solid #e2e8f0",
+  borderRadius: 14,
+  padding: "12px 14px",
+  marginBottom: 16,
+  display: "grid",
+  gap: 8,
+  fontSize: 12,
+  color: "#334155",
+  lineHeight: 1.55,
+};
+
+const labelSm = {
+  display: "block",
+  fontSize: 12,
+  fontWeight: 700,
+  color: "#334155",
+  marginBottom: 8,
+};
+
+const radioRow = {
+  display: "flex",
+  gap: 16,
+  flexWrap: "wrap",
+};
+
+const radioLabel = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 8,
+  fontSize: 13,
+  color: "#334155",
+};
+
+const inputFull = {
+  width: "100%",
+  height: 38,
+  borderRadius: 12,
+  border: "1px solid #cbd5e1",
+  background: "#ffffff",
+  padding: "0 14px",
+  fontSize: 13,
+  color: "#0f172a",
+  boxSizing: "border-box",
+};
+
+const helperText = {
+  marginTop: 8,
+  fontSize: 11,
+  color: "#64748b",
+  lineHeight: 1.5,
+};
+
+const rejectNote = {
+  padding: "12px 14px",
+  borderRadius: 14,
+  background: "#fef2f2",
+  border: "1px solid #fecaca",
+  color: "#b91c1c",
+  fontSize: 12,
+  lineHeight: 1.55,
+};
+
+const modalActions = {
+  marginTop: 18,
+  display: "flex",
+  justifyContent: "flex-end",
+  gap: 10,
+  flexWrap: "wrap",
+};
+
+const btnDeclineAction = {
+  padding: "10px 14px",
+  borderRadius: 10,
+  border: "1px solid #fecaca",
+  background: "#fef2f2",
+  color: "#dc2626",
+  fontSize: 12,
+  fontWeight: 700,
+  cursor: "pointer",
+};

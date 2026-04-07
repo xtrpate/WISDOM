@@ -80,6 +80,7 @@ app.use(
 );
 
 // 3. Staff / POS Routes
+app.use("/api/pos/reports", require("./routes/pos.reports"));
 app.use("/api/pos/dashboard", require("./routes/pos.dashboard"));
 app.use("/api/pos/products", require("./routes/pos.products"));
 app.use("/api/pos/orders", require("./routes/pos.orders"));
@@ -88,7 +89,6 @@ app.use("/api/pos/tasks", require("./routes/pos.tasks"));
 app.use("/api/pos", require("./routes/pos.fulfillment"));
 app.use("/api/pos", require("./routes/pos.schedule"));
 app.use("/api/pos", require("./routes/pos.receipts"));
-app.use("/api/pos/reports", require("./routes/pos.reports")); // Updated to match our new reports setup
 
 // ── Health Check ──────────────────────────────────────────────────────────────
 app.get("/health", async (req, res) => {

@@ -1,5 +1,5 @@
 // middleware/auditLog.js – Log admin/staff actions for accountability
-const pool = require('../config/db');
+const pool = require("../config/db");
 
 /**
  * Factory: logAction('create_product', 'products')
@@ -21,16 +21,16 @@ function logAction(action, tableName) {
               req.user.id,
               action,
               tableName,
-              req.auditRecord.id   || null,
-              req.auditRecord.old  ? JSON.stringify(req.auditRecord.old)  : null,
-              req.auditRecord.new  ? JSON.stringify(req.auditRecord.new)  : null,
+              req.auditRecord.id || null,
+              req.auditRecord.old ? JSON.stringify(req.auditRecord.old) : null,
+              req.auditRecord.new ? JSON.stringify(req.auditRecord.new) : null,
               req.ip || null,
-            ]
+            ],
           );
         }
       } catch (e) {
         // Non-blocking: log errors should never break the response
-        console.error('Audit log error:', e.message);
+        console.error("Audit log error:", e.message);
       }
       return originalJson(body);
     };

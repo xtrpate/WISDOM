@@ -12,23 +12,23 @@ export function createClosetWardrobeComponents(
 ) {
   const floorY = canvasH - FLOOR_OFFSET;
 
-  // overall
+  // overall size
   const w = 3200;
   const h = 2400;
   const d = 600;
 
-  // IMPORTANT:
-  // multiples of 20 para hindi sinisira ng snap() sa normalizeComponent
-  const t = 20;
-  const backT = 20;
-  const shelfT = 20;
-  const rodT = 20;
+  // board thickness
+  const t = 18;
+  const backT = 12;
+  const shelfT = 18;
+  const shelfDepth = d - 28;
+  const frontInset = 10;
+  const backBottomOverlap = 8;
 
-  // 4 bays — mas dikit sa reference image
-  // total inner = 3100 (kasi 3200 - five 20mm vertical panels = 3100)
-  const bay1W = 720;
-  const bay2W = 620;
-  const bay3W = 1020;
+  // openings
+  const bay1W = 740;
+  const bay2W = 700;
+  const bay3W = 930;
   const bay4W = 740;
 
   const innerX = originX + t;
@@ -45,56 +45,53 @@ export function createClosetWardrobeComponents(
   const bay4X = div3X + t;
 
   const topY = floorY - h;
+  const topShelfY = topY + 255;
+  const rodY = topShelfY + 58;
 
-  // layout heights
-  const topShelfY = topY + 200;
-  const rodY = topShelfY + 80;
+  const topAddOnX = originX + t;
+  const topAddOnW = w - t * 2;
+  const topAddOnZ = originZ + frontInset;
+  const topAddOnD = shelfDepth;
 
-  const baseDeckY = floorY - 20;
-  const baseDeckDepth = d;
+  // base
+  const baseTopT = 18;
+  const baseFaceH = 96;
+  const baseTopY = floorY - baseFaceH - baseTopT;
+  const baseDepth = d - 18;
 
-  const shelfInsetX = 20;
-  const shelfInsetZ = 20;
-  const shelfDepth = d - shelfInsetZ * 2;
+  // shelves
+  const bay2Shelf1Y = topY + 650;
+  const bay2Shelf2Y = topY + 1020;
+  const bay1ExtraShelfY = topY + 1545;
 
-  // left bay
-  const bay1LowerShelfY = floorY - 920;
-
-  // second bay
-  const bay2Shelf1Y = topY + 760;
-  const bay2Shelf2Y = topY + 1160;
-
-  const bay2DrawerCoverY = floorY - 900;
-  const bay2DrawerFrontH = 300;
-  const bay2DrawerGap = 20;
-  const bay2Drawer1Y = bay2DrawerCoverY + shelfT + 20;
+  // drawers
+  const bay2DrawerCoverY = topY + 1685;
+  const bay2DrawerFrontH = 210;
+  const bay2DrawerGap = 8;
+  const bay2Drawer1Y = bay2DrawerCoverY + shelfT + 5;
   const bay2Drawer2Y = bay2Drawer1Y + bay2DrawerFrontH + bay2DrawerGap;
 
-  // third bay
-  const bay3PedestalW = 300;
-  const bay3DrawerFrontH = 180;
-  const bay3DrawerY = floorY - 420;
-  const bay3DrawerCoverY = bay3DrawerY - 40;
+  const bay3PedestalW = 320;
+  const bay3DrawerCoverY = topY + 1940;
+  const bay3DrawerY = bay3DrawerCoverY + shelfT + 5;
+  const bay3DrawerFrontW = bay3PedestalW - 28;
+  const bay3PedestalSideX = bay3X + bay3PedestalW - t;
 
-  const bay3SupportX = bay3X + bay3PedestalW - t;
-  const bay3TableTopY = floorY - 980;
-  const bay3TableX = bay3SupportX;
-  const bay3TableW = bay3W - (bay3PedestalW - t);
+  const bay3TableTopY = topY + 1135;
   const bay3TableZ = originZ + 140;
-  const bay3TableD = 440;
+  const bay3TableD = 430;
+  const bay3TableX = bay3PedestalSideX;
+  const bay3TableW = bay3W - (bay3PedestalW - t);
 
   const C = {
-    carcass: "#8a5b38",
-    divider: "#7a4d2d",
-    shelf: "#b88456",
-    innerShelf: "#c79463",
-    drawerFront: "#d4a06d",
-    drawerBox: "#6f472a",
-    drawerBottom: "#8a5a36",
-    backDark: "#8f613d",
-    backMid: "#9d6d47",
-    backLight: "#c59a72",
-    metal: "#c9ced6",
+    carcass: "#8A5C38",
+    divider: "#7A4F2F",
+    shelf: "#A87449",
+    drawerFront: "#BC8456",
+    drawerBox: "#76492B",
+    drawerBottom: "#99663E",
+    back: "#6A4025",
+    metal: "#C9CED6",
   };
 
   const part = (data) =>
@@ -106,129 +103,25 @@ export function createClosetWardrobeComponents(
       ...data,
     });
 
-  const shelf = ({
-    x,
-    y,
-    width,
-    depth = shelfDepth,
-    z = originZ + shelfInsetZ,
-    label,
-    partCode,
-    fill = C.innerShelf,
-    type = "wr_shelf",
-  }) =>
-    part({
-      type,
-      label,
-      partCode,
-      x,
-      y,
-      z,
-      width,
-      height: shelfT,
-      depth,
-      fill,
-      material: "Laminated Board",
-    });
-
-  const vertical = ({
-    x,
-    y,
-    z = originZ,
-    width = t,
-    height,
-    depth = d,
-    label,
-    partCode,
-    fill = C.divider,
-    type = "wr_divider",
-  }) =>
-    part({
-      type,
-      label,
-      partCode,
-      x,
-      y,
-      z,
-      width,
-      height,
-      depth,
-      fill,
-      material: "Laminated Board",
-    });
-
-  const backPanel = ({
-    x,
-    width,
-    fill,
-    label,
-    partCode,
-  }) =>
-    part({
-      type: "wr_back_panel",
-      label,
-      partCode,
-      x,
-      y: topY + 20,
-      z: originZ,
-      width,
-      height: h - 20,
-      depth: backT,
-      fill,
-      material: "Panel Board",
-    });
-
-  const rod = ({ x, width, suffix }) =>
-    part({
-      type: "wr_rod",
-      label: `Hanging Rod ${suffix}`,
-      partCode: `WR-R${suffix}`,
-      x,
-      y: rodY,
-      z: originZ + 340,
-      width,
-      height: rodT,
-      depth: rodT,
-      fill: C.metal,
-      material: "Metal",
-    });
-
-  const buildTopShelf = ({ x, width, suffix }) => [
-    shelf({
-      x: x + shelfInsetX,
-      y: topShelfY,
-      width: width - shelfInsetX * 2,
-      depth: shelfDepth,
-      label: `Top Shelf ${suffix}`,
-      partCode: `WR-TS${suffix}`,
-      fill: C.shelf,
-      type: "wr_top_shelf",
-    }),
-  ];
-
-  const buildBaseDeck = ({ x, width, suffix }) => [
+  const buildRaisedBase = ({ x, width, suffix }) => [
     part({
       type: "wr_base_top",
-      label: `Base Deck ${suffix}`,
-      partCode: `WR-B${suffix}`,
+      label: `Base Top ${suffix}`,
+      partCode: `WR-BT${suffix}`,
       x,
-      y: baseDeckY,
+      y: baseTopY,
       z: originZ,
       width,
-      height: 20,
-      depth: baseDeckDepth,
+      height: baseTopT,
+      depth: baseDepth,
       fill: C.shelf,
-      material: "Laminated Board",
     }),
   ];
 
   const buildDrawerUnit = ({ x, y, frontW, frontH, suffix }) => {
-    const frontZ = originZ + d - 20 + SURFACE_EPS;
-    const bodyW = frontW - 40;
-    const bodyH = Math.max(120, frontH - 100);
-    const boxZ = originZ + 60;
-    const bodyD = 400;
-    const handleW = frontW > 360 ? 100 : 80;
+    const frontZ = originZ + d - 18 + SURFACE_EPS;
+    const bodyW = frontW - 24;
+    const boxZ = originZ + 40;
 
     return [
       part({
@@ -240,80 +133,74 @@ export function createClosetWardrobeComponents(
         z: frontZ,
         width: frontW,
         height: frontH,
-        depth: 20,
+        depth: 18,
         fill: C.drawerFront,
-        material: "Laminated Board",
       }),
       part({
         type: "wr_drawer_side",
         label: `Drawer Side L ${suffix}`,
         partCode: `WR-DSL${suffix}`,
-        x: x + 20,
-        y: y + 20,
+        x: x + 12,
+        y: y + 16,
         z: boxZ,
-        width: 20,
-        height: bodyH,
-        depth: bodyD,
+        width: 12,
+        height: 120,
+        depth: 400,
         fill: C.drawerBox,
-        material: "Panel Board",
       }),
       part({
         type: "wr_drawer_side",
         label: `Drawer Side R ${suffix}`,
         partCode: `WR-DSR${suffix}`,
-        x: x + frontW - 40,
-        y: y + 20,
+        x: x + frontW - 24,
+        y: y + 16,
         z: boxZ,
-        width: 20,
-        height: bodyH,
-        depth: bodyD,
+        width: 12,
+        height: 120,
+        depth: 400,
         fill: C.drawerBox,
-        material: "Panel Board",
       }),
       part({
         type: "wr_drawer_back",
         label: `Drawer Back ${suffix}`,
         partCode: `WR-DB${suffix}`,
-        x: x + 40,
-        y: y + 20,
-        z: boxZ + bodyD - 20,
-        width: bodyW - 20,
-        height: bodyH,
-        depth: 20,
+        x: x + 24,
+        y: y + 16,
+        z: boxZ + 388,
+        width: bodyW - 24,
+        height: 120,
+        depth: 12,
         fill: C.drawerBox,
-        material: "Panel Board",
       }),
       part({
         type: "wr_drawer_bottom",
         label: `Drawer Bottom ${suffix}`,
         partCode: `WR-DP${suffix}`,
-        x: x + 20,
-        y: y + 20 + bodyH - 20,
-        z: boxZ + 20,
+        x: x + 12,
+        y: y + 130,
+        z: boxZ + 12,
         width: bodyW,
-        height: 20,
-        depth: bodyD - 40,
+        height: 6,
+        depth: 360,
         fill: C.drawerBottom,
-        material: "Panel Board",
       }),
       part({
         type: "wr_drawer_handle",
         label: `Handle ${suffix}`,
         partCode: `WR-HDL${suffix}`,
-        x: x + frontW / 2 - handleW / 2,
-        y: y + frontH / 2 - 10,
-        z: originZ + d + 20,
-        width: handleW,
-        height: 20,
-        depth: 20,
+        x: x + frontW / 2 - 50,
+        y: y + frontH / 2 - 8,
+        z: originZ + d + 6,
+        width: 100,
+        height: 16,
+        depth: 12,
         fill: C.metal,
-        material: "Metal",
       }),
     ];
   };
 
   return [
-    // outer sides
+    // outer
     part({
       type: "wr_side_panel",
       label: "Left Side",
@@ -325,7 +212,6 @@ export function createClosetWardrobeComponents(
       height: h,
       depth: d,
       fill: C.carcass,
-      material: "Laminated Board",
     }),
     part({
       type: "wr_side_panel",
@@ -338,164 +224,180 @@ export function createClosetWardrobeComponents(
       height: h,
       depth: d,
       fill: C.carcass,
-      material: "Laminated Board",
     }),
 
-    // back panels per bay — para mas dikit sa reference
-    backPanel({
-      x: bay1X,
-      width: bay1W,
-      fill: C.backDark,
-      label: "Back Panel 1",
-      partCode: "WR-BK1",
-    }),
-    backPanel({
-      x: bay2X,
-      width: bay2W,
-      fill: C.backMid,
-      label: "Back Panel 2",
-      partCode: "WR-BK2",
-    }),
-    backPanel({
-      x: bay3X,
-      width: bay3W,
-      fill: C.backLight,
-      label: "Back Panel 3",
-      partCode: "WR-BK3",
-    }),
-    backPanel({
-      x: bay4X,
-      width: bay4W,
-      fill: C.backMid,
-      label: "Back Panel 4",
-      partCode: "WR-BK4",
+    part({
+      type: "wr_back_panel",
+      label: "Back",
+      partCode: "WR-BK",
+      x: originX + t,
+      y: topY + t,
+      z: originZ,
+      width: w - t * 2,
+      height: h - t + backBottomOverlap,
+      depth: backT,
+      fill: C.back,
     }),
 
     // dividers
-    vertical({
-      x: div1X,
-      y: topY,
-      height: h,
-      label: "Divider 1",
+    part({
+      type: "wr_divider",
+      label: "Div1",
       partCode: "WR-D1",
+      x: div1X,
+      y: topY + t,
+      z: originZ,
+      width: t,
+      height: h - t * 2,
+      depth: d,
+      fill: C.divider,
     }),
-    vertical({
-      x: div2X,
-      y: topY,
-      height: h,
-      label: "Divider 2",
+    part({
+      type: "wr_divider",
+      label: "Div2",
       partCode: "WR-D2",
+      x: div2X,
+      y: topY + t,
+      z: originZ,
+      width: t,
+      height: h - t * 2,
+      depth: d,
+      fill: C.divider,
     }),
-    vertical({
-      x: div3X,
-      y: topY,
-      height: h,
-      label: "Divider 3",
+    part({
+      type: "wr_divider",
+      label: "Div3",
       partCode: "WR-D3",
+      x: div3X,
+      y: topY + t,
+      z: originZ,
+      width: t,
+      height: h - t * 2,
+      depth: d,
+      fill: C.divider,
     }),
 
     // top shelves
-    ...buildTopShelf({ x: bay1X, width: bay1W, suffix: "1" }),
-    ...buildTopShelf({ x: bay2X, width: bay2W, suffix: "2" }),
-    ...buildTopShelf({ x: bay3X, width: bay3W, suffix: "3" }),
-    ...buildTopShelf({ x: bay4X, width: bay4W, suffix: "4" }),
-
-    // base decks
-    ...buildBaseDeck({ x: bay1X, width: bay1W, suffix: "1" }),
-    ...buildBaseDeck({ x: bay2X, width: bay2W, suffix: "2" }),
-    ...buildBaseDeck({ x: bay3X, width: bay3W, suffix: "3" }),
-    ...buildBaseDeck({ x: bay4X, width: bay4W, suffix: "4" }),
+    part({
+      type: "wr_shelf",
+      label: "Top AddOn",
+      partCode: "WR-TOP",
+      x: topAddOnX,
+      y: topY,
+      z: topAddOnZ,
+      width: topAddOnW,
+      height: shelfT,
+      depth: topAddOnD,
+      fill: C.shelf,
+    }),
 
     // rods
-    rod({ x: bay1X + 40, width: bay1W - 80, suffix: "1" }),
-    rod({ x: bay3X + 60, width: bay3W - 120, suffix: "3" }),
-    rod({ x: bay4X + 40, width: bay4W - 80, suffix: "4" }),
-
-    // bay 1
-    shelf({
-      x: bay1X + shelfInsetX,
-      y: bay1LowerShelfY,
-      width: bay1W - shelfInsetX * 2,
-      label: "Bay 1 Lower Shelf",
-      partCode: "WR-B1-S1",
-      fill: C.shelf,
+    part({
+      type: "wr_rod",
+      label: "Rod1",
+      partCode: "WR-R1",
+      x: bay1X + 40,
+      y: rodY,
+      z: originZ + d * 0.6,
+      width: bay1W - 80,
+      height: 16,
+      depth: 16,
+      fill: C.metal,
+    }),
+    part({
+      type: "wr_rod",
+      label: "Rod3",
+      partCode: "WR-R3",
+      x: bay3X + 40,
+      y: rodY,
+      z: originZ + d * 0.6,
+      width: bay3W - 80,
+      height: 16,
+      depth: 16,
+      fill: C.metal,
+    }),
+    part({
+      type: "wr_rod",
+      label: "Rod4",
+      partCode: "WR-R4",
+      x: bay4X + 40,
+      y: rodY,
+      z: originZ + d * 0.6,
+      width: bay4W - 80,
+      height: 16,
+      depth: 16,
+      fill: C.metal,
     }),
 
-    // bay 2
-    shelf({
-      x: bay2X + shelfInsetX,
+    // bases
+    ...buildRaisedBase({ x: bay1X, width: bay1W, suffix: "1" }),
+    ...buildRaisedBase({ x: bay2X, width: bay2W, suffix: "2" }),
+    ...buildRaisedBase({ x: bay3X, width: bay3W, suffix: "3" }),
+    ...buildRaisedBase({ x: bay4X, width: bay4W, suffix: "4" }),
+
+    // center shelves
+    part({
+      type: "wr_shelf",
+      label: "Center1",
+      partCode: "WR-C1",
+      x: bay2X,
       y: bay2Shelf1Y,
-      width: bay2W - shelfInsetX * 2,
-      label: "Bay 2 Shelf 1",
-      partCode: "WR-B2-S1",
-    }),
-    shelf({
-      x: bay2X + shelfInsetX,
-      y: bay2Shelf2Y,
-      width: bay2W - shelfInsetX * 2,
-      label: "Bay 2 Shelf 2",
-      partCode: "WR-B2-S2",
-    }),
-    shelf({
-      x: bay2X + 20,
-      y: bay2DrawerCoverY,
-      width: bay2W - 40,
-      label: "Bay 2 Drawer Cover",
-      partCode: "WR-B2-CV",
+      z: originZ + frontInset,
+      width: bay2W,
+      height: shelfT,
+      depth: shelfDepth,
       fill: C.shelf,
     }),
+    part({
+      type: "wr_shelf",
+      label: "Center2",
+      partCode: "WR-C2",
+      x: bay2X,
+      y: bay2Shelf2Y,
+      z: originZ + frontInset,
+      width: bay2W,
+      height: shelfT,
+      depth: shelfDepth,
+      fill: C.shelf,
+    }),
+
+    // drawers
     ...buildDrawerUnit({
-      x: bay2X + 20,
+      x: bay2X + 10,
       y: bay2Drawer1Y,
-      frontW: bay2W - 40,
+      frontW: bay2W - 20,
       frontH: bay2DrawerFrontH,
       suffix: "1",
     }),
     ...buildDrawerUnit({
-      x: bay2X + 20,
+      x: bay2X + 10,
       y: bay2Drawer2Y,
-      frontW: bay2W - 40,
+      frontW: bay2W - 20,
       frontH: bay2DrawerFrontH,
       suffix: "2",
     }),
 
-    // bay 3 - low drawer + side table
-    shelf({
-      x: bay3X + 20,
-      y: bay3DrawerCoverY,
-      width: bay3PedestalW - 40,
-      label: "Bay 3 Drawer Cover",
-      partCode: "WR-B3-CV",
-      fill: C.shelf,
-    }),
+    // small drawer
     ...buildDrawerUnit({
-      x: bay3X + 20,
+      x: bay3X + 12,
       y: bay3DrawerY,
-      frontW: bay3PedestalW - 40,
-      frontH: bay3DrawerFrontH,
+      frontW: bay3DrawerFrontW,
+      frontH: 160,
       suffix: "3",
     }),
-    vertical({
-      x: bay3SupportX,
-      y: bay3TableTopY + shelfT,
-      z: bay3TableZ,
-      height: baseDeckY - (bay3TableTopY + shelfT),
-      depth: bay3TableD,
-      label: "Bay 3 Table Support",
-      partCode: "WR-B3-SP",
-      fill: C.divider,
-      type: "wr_support_panel",
-    }),
-    shelf({
+
+    // table
+    part({
+      type: "wr_table",
+      label: "Side Table",
+      partCode: "WR-TBL",
       x: bay3TableX,
       y: bay3TableTopY,
       z: bay3TableZ,
       width: bay3TableW,
+      height: shelfT,
       depth: bay3TableD,
-      label: "Bay 3 Side Table",
-      partCode: "WR-B3-TBL",
       fill: C.shelf,
-      type: "wr_table",
     }),
   ];
 }

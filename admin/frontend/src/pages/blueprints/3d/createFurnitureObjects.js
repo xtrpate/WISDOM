@@ -115,7 +115,6 @@ function buildWardrobePart3D(root, selectableMeshes, comp, palette, r = 0) {
   });
   const FACE_GAP = 0.8;
 
-  
   if (comp.type === "wr_rod") {
     const radius = Math.max(4, Math.min(h, d) * 0.28);
 

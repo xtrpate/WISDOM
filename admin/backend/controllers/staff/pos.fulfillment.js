@@ -95,15 +95,14 @@ exports.getDeliverableOrders = async (req, res) => {
         o.created_at,
         COALESCE(c.name, o.walkin_customer_name, 'Walk-in Customer') AS customer_name,
         COALESCE(c.phone, o.walkin_customer_phone, 'No phone provided') AS customer_phone,
-        COALESCE(o.address, c.address, 'No address provided') AS delivery_address,
+        COALESCE(o.delivery_address, c.address, 'No address provided') AS delivery_address,
         o.total,
         o.status AS order_status,
-        o.delivery_status,
+        o.status AS delivery_status, 
         o.payment_method
       FROM orders o
       LEFT JOIN users c ON o.customer_id = c.id
-      WHERE o.status != 'cancelled' 
-        AND (o.delivery_status IS NULL OR o.delivery_status IN ('pending', 'scheduled', 'in_transit'))
+      WHERE o.status NOT IN ('cancelled', 'delivered', 'done')
       ORDER BY o.created_at ASC
     `);
 

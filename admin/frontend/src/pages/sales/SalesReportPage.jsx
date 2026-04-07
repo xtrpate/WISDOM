@@ -294,7 +294,7 @@ export default function SalesReportPage() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(3, 1fr)",
+            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
             gap: 14,
             marginBottom: 24,
           }}

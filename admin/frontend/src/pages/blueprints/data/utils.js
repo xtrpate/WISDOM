@@ -151,7 +151,10 @@ function getReferenceFileFromBlueprint(
   blueprintData = {},
   preferredView = "front",
 ) {
-  const referenceFiles = getReferenceFilesFromBlueprint(savedData, blueprintData);
+  const referenceFiles = getReferenceFilesFromBlueprint(
+    savedData,
+    blueprintData,
+  );
 
   return (
     referenceFiles?.[preferredView] ||

@@ -1,12 +1,3 @@
-/**
- * pages/ProfileSettings.jsx
- * Sections:
- *  1. Profile picture upload
- *  2. Basic info (name, address) — save directly
- *  3. Email change — requires email OTP
- *  4. Phone change — requires SMS OTP (Twilio)
- *  5. Password change — requires email OTP first
- */
 import { useState, useRef, useEffect } from "react";
 import axios from "axios";
 import {
@@ -17,7 +8,6 @@ import {
   Camera,
   Check,
   Pencil,
-  X,
   Eye,
   EyeOff,
   ShieldCheck,
@@ -66,7 +56,6 @@ export default function ProfileSettings() {
   const fileRef = useRef(null);
 
   /* ─ State ─ */
-  const [activeSection, setActiveSection] = useState("basic");
   const [avatarPreview, setAvatarPreview] = useState(
     user?.profile_photo ? `/uploads/avatars/${user.profile_photo}` : null,
   );
@@ -87,7 +76,7 @@ export default function ProfileSettings() {
   const [editEmail, setEditEmail] = useState(false);
   const [newEmail, setNewEmail] = useState("");
   const [emailOtp, setEmailOtp] = useState("");
-  const [emailStep, setEmailStep] = useState(1); // 1=input, 2=verify
+  const [emailStep, setEmailStep] = useState(1);
   const [emailMsg, setEmailMsg] = useState({ type: "", text: "" });
   const [emailLoading, setEmailLoading] = useState(false);
   const [emailCooldown, setEmailCooldown] = useState(0);
@@ -96,7 +85,7 @@ export default function ProfileSettings() {
   const [editPhone, setEditPhone] = useState(false);
   const [newPhone, setNewPhone] = useState("");
   const [phoneOtp, setPhoneOtp] = useState("");
-  const [phoneStep, setPhoneStep] = useState(1); // 1=input, 2=verify
+  const [phoneStep, setPhoneStep] = useState(1);
   const [phoneMsg, setPhoneMsg] = useState({ type: "", text: "" });
   const [phoneLoading, setPhoneLoading] = useState(false);
   const [phoneCooldown, setPhoneCooldown] = useState(0);
@@ -109,7 +98,7 @@ export default function ProfileSettings() {
     confirm: "",
   });
   const [passOtp, setPassOtp] = useState("");
-  const [passStep, setPassStep] = useState(1); // 1=input, 2=verify OTP
+  const [passStep, setPassStep] = useState(1);
   const [passMsg, setPassMsg] = useState({ type: "", text: "" });
   const [passLoading, setPassLoading] = useState(false);
   const [showPass, setShowPass] = useState({
@@ -373,632 +362,556 @@ export default function ProfileSettings() {
       </div>
 
       <div className="profile-layout">
-        {/* ── Sidebar ── */}
-        <aside className="profile-sidebar">
-          <div className="profile-sidebar-top">
-            <div className="profile-avatar-wrap">
-              <div className="profile-avatar">
-                {avatarPreview ? (
-                  <img src={avatarPreview} alt="avatar" />
-                ) : (
-                  initials
-                )}
-              </div>
-              <div
-                className="profile-avatar-edit"
-                onClick={() => fileRef.current?.click()}
-                title="Change photo"
-              >
-                ✏️
-              </div>
-              <input
-                ref={fileRef}
-                type="file"
-                accept="image/*"
-                style={{ display: "none" }}
-                onChange={handleAvatarChange}
-              />
-            </div>
-            <div className="profile-sidebar-name">{user?.name}</div>
-            <div className="profile-sidebar-email">{user?.email}</div>
-          </div>
-
-          <nav className="profile-nav">
-            {[
-              { key: "avatar", icon: "🖼️", label: "Profile Picture" },
-              { key: "basic", icon: "👤", label: "Basic Info" },
-              { key: "email", icon: "✉️", label: "Email Address" },
-              { key: "phone", icon: "📱", label: "Phone Number" },
-              { key: "pass", icon: "🔒", label: "Password" },
-            ].map((item) => (
-              <button
-                key={item.key}
-                className={`profile-nav-item ${activeSection === item.key ? "active" : ""}`}
-                onClick={() => setActiveSection(item.key)}
-              >
-                <span>{item.icon}</span> {item.label}
-              </button>
-            ))}
-          </nav>
-        </aside>
-
-        {/* ── Content ── */}
         <div className="profile-content">
           {/* ══ AVATAR ══ */}
-          {activeSection === "avatar" && (
-            <div className="profile-section">
-              <div className="profile-section-header">
-                <h3>
-                  <Camera size={16} /> Profile Picture
-                </h3>
+          <div className="profile-section">
+            <div className="profile-section-header">
+              <h3>
+                <Camera size={16} /> Profile Picture
+              </h3>
+            </div>
+            <div className="profile-section-body">
+              <Alert type={avatarMsg.type} msg={avatarMsg.text} />
+              <div className="avatar-upload-area">
+                <div className="avatar-preview">
+                  {avatarPreview ? (
+                    <img src={avatarPreview} alt="preview" />
+                  ) : (
+                    initials
+                  )}
+                </div>
+                <div className="avatar-upload-info">
+                  <p>
+                    Upload a photo to personalize your account. JPG or PNG, max
+                    2MB.
+                  </p>
+                  <button
+                    className="avatar-upload-btn"
+                    onClick={() => fileRef.current?.click()}
+                  >
+                    <Camera size={14} /> Choose Photo
+                  </button>
+                  <input
+                    ref={fileRef}
+                    type="file"
+                    accept="image/*"
+                    style={{ display: "none" }}
+                    onChange={handleAvatarChange}
+                  />
+                </div>
               </div>
-              <div className="profile-section-body">
-                <Alert type={avatarMsg.type} msg={avatarMsg.text} />
-                <div className="avatar-upload-area">
-                  <div className="avatar-preview">
-                    {avatarPreview ? (
-                      <img src={avatarPreview} alt="preview" />
-                    ) : (
-                      initials
-                    )}
+              {avatarFile && (
+                <div className="profile-form-actions" style={{ marginTop: 16 }}>
+                  <button
+                    className="btn btn-primary"
+                    onClick={saveAvatar}
+                    disabled={avatarLoading}
+                  >
+                    {avatarLoading ? "Uploading…" : "✓ Save Photo"}
+                  </button>
+                  <button
+                    className="btn btn-secondary"
+                    onClick={() => {
+                      setAvatarFile(null);
+                      setAvatarPreview(
+                        user?.profile_photo
+                          ? `/uploads/avatars/${user.profile_photo}`
+                          : null,
+                      );
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* ══ BASIC INFO ══ */}
+          <div className="profile-section">
+            <div className="profile-section-header">
+              <h3>
+                <User size={16} /> Basic Information
+              </h3>
+              {!editBasic && (
+                <button
+                  className="edit-toggle"
+                  onClick={() => setEditBasic(true)}
+                >
+                  <Pencil size={13} /> Edit
+                </button>
+              )}
+            </div>
+            <div className="profile-section-body">
+              <Alert type={basicMsg.type} msg={basicMsg.text} />
+              {editBasic ? (
+                <div className="profile-form">
+                  <div className="form-row">
+                    <div className="form-field">
+                      <label>Full Name</label>
+                      <input
+                        type="text"
+                        value={basicForm.name}
+                        onChange={(e) =>
+                          setBasicForm((p) => ({ ...p, name: e.target.value }))
+                        }
+                        placeholder="Your full name"
+                      />
+                    </div>
                   </div>
-                  <div className="avatar-upload-info">
-                    <p>
-                      Upload a photo to personalize your account. JPG or PNG,
-                      max 2MB.
-                    </p>
-                    <button
-                      className="avatar-upload-btn"
-                      onClick={() => fileRef.current?.click()}
-                    >
-                      <Camera size={14} /> Choose Photo
-                    </button>
+                  <div className="form-field full">
+                    <label>Address</label>
                     <input
-                      ref={fileRef}
-                      type="file"
-                      accept="image/*"
-                      style={{ display: "none" }}
-                      onChange={handleAvatarChange}
+                      type="text"
+                      value={basicForm.address}
+                      onChange={(e) =>
+                        setBasicForm((p) => ({ ...p, address: e.target.value }))
+                      }
+                      placeholder="Street, Barangay, City"
                     />
                   </div>
-                </div>
-                {avatarFile && (
-                  <div
-                    className="profile-form-actions"
-                    style={{ marginTop: 16 }}
-                  >
+                  <div className="profile-form-actions">
                     <button
                       className="btn btn-primary"
-                      onClick={saveAvatar}
-                      disabled={avatarLoading}
+                      onClick={saveBasic}
+                      disabled={basicLoading}
                     >
-                      {avatarLoading ? "Uploading…" : "✓ Save Photo"}
+                      {basicLoading ? (
+                        "Saving…"
+                      ) : (
+                        <>
+                          <Check size={14} /> Save Changes
+                        </>
+                      )}
                     </button>
                     <button
                       className="btn btn-secondary"
                       onClick={() => {
-                        setAvatarFile(null);
-                        setAvatarPreview(
-                          user?.profile_photo
-                            ? `/uploads/avatars/${user.profile_photo}`
-                            : null,
-                        );
+                        setEditBasic(false);
+                        setBasicMsg({ type: "", text: "" });
                       }}
                     >
                       Cancel
                     </button>
                   </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* ══ BASIC INFO ══ */}
-          {activeSection === "basic" && (
-            <div className="profile-section">
-              <div className="profile-section-header">
-                <h3>
-                  <User size={16} /> Basic Information
-                </h3>
-                {!editBasic && (
-                  <button
-                    className="edit-toggle"
-                    onClick={() => setEditBasic(true)}
-                  >
-                    <Pencil size={13} /> Edit
-                  </button>
-                )}
-              </div>
-              <div className="profile-section-body">
-                <Alert type={basicMsg.type} msg={basicMsg.text} />
-                {editBasic ? (
-                  <div className="profile-form">
-                    <div className="form-row">
-                      <div className="form-field">
-                        <label>Full Name</label>
-                        <input
-                          type="text"
-                          value={basicForm.name}
-                          onChange={(e) =>
-                            setBasicForm((p) => ({
-                              ...p,
-                              name: e.target.value,
-                            }))
-                          }
-                          placeholder="Your full name"
-                        />
-                      </div>
-                    </div>
-                    <div className="form-field full">
-                      <label>Address</label>
-                      <input
-                        type="text"
-                        value={basicForm.address}
-                        onChange={(e) =>
-                          setBasicForm((p) => ({
-                            ...p,
-                            address: e.target.value,
-                          }))
-                        }
-                        placeholder="Street, Barangay, City"
-                      />
-                    </div>
-                    <div className="profile-form-actions">
-                      <button
-                        className="btn btn-primary"
-                        onClick={saveBasic}
-                        disabled={basicLoading}
-                      >
-                        {basicLoading ? (
-                          "Saving…"
-                        ) : (
-                          <>
-                            <Check size={14} /> Save Changes
-                          </>
-                        )}
-                      </button>
-                      <button
-                        className="btn btn-secondary"
-                        onClick={() => {
-                          setEditBasic(false);
-                          setBasicMsg({ type: "", text: "" });
-                        }}
-                      >
-                        Cancel
-                      </button>
-                    </div>
+                </div>
+              ) : (
+                <div className="field-display">
+                  <div className="field-row">
+                    <label>Full Name</label>
+                    <span className="field-val">
+                      {user?.name || (
+                        <span className="field-empty">Not set</span>
+                      )}
+                    </span>
                   </div>
-                ) : (
-                  <div className="field-display">
-                    <div className="field-row">
-                      <label>Full Name</label>
-                      <span className="field-val">
-                        {user?.name || (
-                          <span className="field-empty">Not set</span>
-                        )}
-                      </span>
-                    </div>
-                    <div className="field-row">
-                      <label>Address</label>
-                      <span
-                        className={user?.address ? "field-val" : "field-empty"}
-                      >
-                        {user?.address || "Not set"}
-                      </span>
-                    </div>
+                  <div className="field-row">
+                    <label>Address</label>
+                    <span
+                      className={user?.address ? "field-val" : "field-empty"}
+                    >
+                      {user?.address || "Not set"}
+                    </span>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
-          )}
+          </div>
 
           {/* ══ EMAIL ══ */}
-          {activeSection === "email" && (
-            <div className="profile-section">
-              <div className="profile-section-header">
-                <h3>
-                  <Mail size={16} /> Email Address
-                </h3>
-                {!editEmail && (
-                  <button
-                    className="edit-toggle"
-                    onClick={() => setEditEmail(true)}
-                  >
-                    <Pencil size={13} /> Change
-                  </button>
-                )}
-              </div>
-              <div className="profile-section-body">
-                <Alert type={emailMsg.type} msg={emailMsg.text} />
-
-                {!editEmail ? (
-                  <div className="field-display">
-                    <div className="field-row">
-                      <label>Current Email</label>
-                      <span className="field-val">{user?.email}</span>
-                    </div>
-                  </div>
-                ) : emailStep === 1 ? (
-                  <div className="profile-form">
-                    <div className="form-field">
-                      <label>Current Email</label>
-                      <input type="email" value={user?.email} disabled />
-                    </div>
-                    <div className="form-field">
-                      <label>New Email Address</label>
-                      <input
-                        type="email"
-                        value={newEmail}
-                        onChange={(e) => setNewEmail(e.target.value)}
-                        placeholder="newemail@example.com"
-                      />
-                    </div>
-                    <div className="profile-form-actions">
-                      <button
-                        className="btn btn-primary"
-                        onClick={sendEmailOtp}
-                        disabled={emailLoading}
-                      >
-                        {emailLoading ? "Sending…" : "Send Verification OTP"}
-                      </button>
-                      <button
-                        className="btn btn-secondary"
-                        onClick={() => cancelSection("email")}
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="verify-step">
-                    <h4>📧 Verify your new email</h4>
-                    <p>
-                      We sent a 6-digit OTP to <strong>{newEmail}</strong>.
-                      Enter it below to confirm.
-                    </p>
-                    <div className="otp-input-row">
-                      <input
-                        type="text"
-                        maxLength={6}
-                        placeholder="000000"
-                        value={emailOtp}
-                        onChange={(e) =>
-                          setEmailOtp(e.target.value.replace(/\D/g, ""))
-                        }
-                      />
-                      <button
-                        className="resend-btn"
-                        onClick={() => {
-                          setEmailCooldown(60);
-                          sendEmailOtp();
-                        }}
-                        disabled={emailCooldown > 0}
-                      >
-                        {emailCooldown > 0
-                          ? `Resend (${emailCooldown}s)`
-                          : "Resend"}
-                      </button>
-                    </div>
-                    <div
-                      className="profile-form-actions"
-                      style={{ marginTop: 14 }}
-                    >
-                      <button
-                        className="btn btn-primary"
-                        onClick={verifyEmailOtp}
-                        disabled={emailLoading}
-                      >
-                        {emailLoading ? (
-                          "Verifying…"
-                        ) : (
-                          <>
-                            <ShieldCheck size={14} /> Verify & Save
-                          </>
-                        )}
-                      </button>
-                      <button
-                        className="btn btn-secondary"
-                        onClick={() => cancelSection("email")}
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
+          <div className="profile-section">
+            <div className="profile-section-header">
+              <h3>
+                <Mail size={16} /> Email Address
+              </h3>
+              {!editEmail && (
+                <button
+                  className="edit-toggle"
+                  onClick={() => setEditEmail(true)}
+                >
+                  <Pencil size={13} /> Change
+                </button>
+              )}
             </div>
-          )}
+            <div className="profile-section-body">
+              <Alert type={emailMsg.type} msg={emailMsg.text} />
+              {!editEmail ? (
+                <div className="field-display">
+                  <div className="field-row">
+                    <label>Current Email</label>
+                    <span className="field-val">{user?.email}</span>
+                  </div>
+                </div>
+              ) : emailStep === 1 ? (
+                <div className="profile-form">
+                  <div className="form-field">
+                    <label>Current Email</label>
+                    <input type="email" value={user?.email} disabled />
+                  </div>
+                  <div className="form-field">
+                    <label>New Email Address</label>
+                    <input
+                      type="email"
+                      value={newEmail}
+                      onChange={(e) => setNewEmail(e.target.value)}
+                      placeholder="newemail@example.com"
+                    />
+                  </div>
+                  <div className="profile-form-actions">
+                    <button
+                      className="btn btn-primary"
+                      onClick={sendEmailOtp}
+                      disabled={emailLoading}
+                    >
+                      {emailLoading ? "Sending…" : "Send Verification OTP"}
+                    </button>
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => cancelSection("email")}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="verify-step">
+                  <h4>📧 Verify your new email</h4>
+                  <p>
+                    We sent a 6-digit OTP to <strong>{newEmail}</strong>. Enter
+                    it below to confirm.
+                  </p>
+                  <div className="otp-input-row">
+                    <input
+                      type="text"
+                      maxLength={6}
+                      placeholder="000000"
+                      value={emailOtp}
+                      onChange={(e) =>
+                        setEmailOtp(e.target.value.replace(/\D/g, ""))
+                      }
+                    />
+                    <button
+                      className="resend-btn"
+                      onClick={() => {
+                        setEmailCooldown(60);
+                        sendEmailOtp();
+                      }}
+                      disabled={emailCooldown > 0}
+                    >
+                      {emailCooldown > 0
+                        ? `Resend (${emailCooldown}s)`
+                        : "Resend"}
+                    </button>
+                  </div>
+                  <div
+                    className="profile-form-actions"
+                    style={{ marginTop: 14 }}
+                  >
+                    <button
+                      className="btn btn-primary"
+                      onClick={verifyEmailOtp}
+                      disabled={emailLoading}
+                    >
+                      {emailLoading ? (
+                        "Verifying…"
+                      ) : (
+                        <>
+                          <ShieldCheck size={14} /> Verify & Save
+                        </>
+                      )}
+                    </button>
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => cancelSection("email")}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
 
           {/* ══ PHONE ══ */}
-          {activeSection === "phone" && (
-            <div className="profile-section">
-              <div className="profile-section-header">
-                <h3>
-                  <Phone size={16} /> Phone Number
-                </h3>
-                {!editPhone && (
-                  <button
-                    className="edit-toggle"
-                    onClick={() => setEditPhone(true)}
-                  >
-                    <Pencil size={13} /> Change
-                  </button>
-                )}
-              </div>
-              <div className="profile-section-body">
-                <Alert type={phoneMsg.type} msg={phoneMsg.text} />
-
-                {!editPhone ? (
-                  <div className="field-display">
-                    <div className="field-row">
-                      <label>Current Phone</label>
-                      <span
-                        className={user?.phone ? "field-val" : "field-empty"}
-                      >
-                        {user?.phone || "Not set"}
-                      </span>
-                    </div>
-                  </div>
-                ) : phoneStep === 1 ? (
-                  <div className="profile-form">
-                    <div className="form-field">
-                      <label>New Phone Number</label>
-                      <input
-                        type="tel"
-                        value={newPhone}
-                        onChange={(e) => setNewPhone(e.target.value)}
-                        placeholder="09XXXXXXXXX"
-                      />
-                    </div>
-                    <p style={{ fontSize: 12, color: "#888", marginTop: -6 }}>
-                      An SMS with a verification code will be sent to this
-                      number via Twilio.
-                    </p>
-                    <div className="profile-form-actions">
-                      <button
-                        className="btn btn-primary"
-                        onClick={sendPhoneOtp}
-                        disabled={phoneLoading}
-                      >
-                        {phoneLoading ? "Sending SMS…" : "Send SMS OTP"}
-                      </button>
-                      <button
-                        className="btn btn-secondary"
-                        onClick={() => cancelSection("phone")}
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="verify-step">
-                    <h4>📱 Verify your phone number</h4>
-                    <p>
-                      We sent a 6-digit OTP via SMS to{" "}
-                      <strong>{newPhone}</strong>.
-                    </p>
-                    <div className="otp-input-row">
-                      <input
-                        type="text"
-                        maxLength={6}
-                        placeholder="000000"
-                        value={phoneOtp}
-                        onChange={(e) =>
-                          setPhoneOtp(e.target.value.replace(/\D/g, ""))
-                        }
-                      />
-                      <button
-                        className="resend-btn"
-                        onClick={() => {
-                          setPhoneCooldown(60);
-                          sendPhoneOtp();
-                        }}
-                        disabled={phoneCooldown > 0}
-                      >
-                        {phoneCooldown > 0
-                          ? `Resend (${phoneCooldown}s)`
-                          : "Resend SMS"}
-                      </button>
-                    </div>
-                    <div
-                      className="profile-form-actions"
-                      style={{ marginTop: 14 }}
-                    >
-                      <button
-                        className="btn btn-primary"
-                        onClick={verifyPhoneOtp}
-                        disabled={phoneLoading}
-                      >
-                        {phoneLoading ? (
-                          "Verifying…"
-                        ) : (
-                          <>
-                            <ShieldCheck size={14} /> Verify & Save
-                          </>
-                        )}
-                      </button>
-                      <button
-                        className="btn btn-secondary"
-                        onClick={() => cancelSection("phone")}
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
+          <div className="profile-section">
+            <div className="profile-section-header">
+              <h3>
+                <Phone size={16} /> Phone Number
+              </h3>
+              {!editPhone && (
+                <button
+                  className="edit-toggle"
+                  onClick={() => setEditPhone(true)}
+                >
+                  <Pencil size={13} /> Change
+                </button>
+              )}
             </div>
-          )}
+            <div className="profile-section-body">
+              <Alert type={phoneMsg.type} msg={phoneMsg.text} />
+              {!editPhone ? (
+                <div className="field-display">
+                  <div className="field-row">
+                    <label>Current Phone</label>
+                    <span className={user?.phone ? "field-val" : "field-empty"}>
+                      {user?.phone || "Not set"}
+                    </span>
+                  </div>
+                </div>
+              ) : phoneStep === 1 ? (
+                <div className="profile-form">
+                  <div className="form-field">
+                    <label>New Phone Number</label>
+                    <input
+                      type="tel"
+                      value={newPhone}
+                      onChange={(e) => setNewPhone(e.target.value)}
+                      placeholder="09XXXXXXXXX"
+                    />
+                  </div>
+                  <p style={{ fontSize: 12, color: "#888", marginTop: -6 }}>
+                    An SMS with a verification code will be sent to this number.
+                  </p>
+                  <div className="profile-form-actions">
+                    <button
+                      className="btn btn-primary"
+                      onClick={sendPhoneOtp}
+                      disabled={phoneLoading}
+                    >
+                      {phoneLoading ? "Sending SMS…" : "Send SMS OTP"}
+                    </button>
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => cancelSection("phone")}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="verify-step">
+                  <h4>📱 Verify your phone number</h4>
+                  <p>
+                    We sent a 6-digit OTP via SMS to <strong>{newPhone}</strong>
+                    .
+                  </p>
+                  <div className="otp-input-row">
+                    <input
+                      type="text"
+                      maxLength={6}
+                      placeholder="000000"
+                      value={phoneOtp}
+                      onChange={(e) =>
+                        setPhoneOtp(e.target.value.replace(/\D/g, ""))
+                      }
+                    />
+                    <button
+                      className="resend-btn"
+                      onClick={() => {
+                        setPhoneCooldown(60);
+                        sendPhoneOtp();
+                      }}
+                      disabled={phoneCooldown > 0}
+                    >
+                      {phoneCooldown > 0
+                        ? `Resend (${phoneCooldown}s)`
+                        : "Resend SMS"}
+                    </button>
+                  </div>
+                  <div
+                    className="profile-form-actions"
+                    style={{ marginTop: 14 }}
+                  >
+                    <button
+                      className="btn btn-primary"
+                      onClick={verifyPhoneOtp}
+                      disabled={phoneLoading}
+                    >
+                      {phoneLoading ? (
+                        "Verifying…"
+                      ) : (
+                        <>
+                          <ShieldCheck size={14} /> Verify & Save
+                        </>
+                      )}
+                    </button>
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => cancelSection("phone")}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
 
           {/* ══ PASSWORD ══ */}
-          {activeSection === "pass" && (
-            <div className="profile-section">
-              <div className="profile-section-header">
-                <h3>
-                  <Lock size={16} /> Change Password
-                </h3>
-                {!editPass && (
-                  <button
-                    className="edit-toggle"
-                    onClick={() => setEditPass(true)}
-                  >
-                    <Pencil size={13} /> Change
-                  </button>
-                )}
-              </div>
-              <div className="profile-section-body">
-                <Alert type={passMsg.type} msg={passMsg.text} />
-
-                {!editPass ? (
-                  <div className="field-display">
-                    <div className="field-row">
-                      <label>Password</label>
-                      <span className="field-val">••••••••••</span>
-                    </div>
-                  </div>
-                ) : passStep === 1 ? (
-                  <div className="profile-form">
-                    {[
-                      {
-                        key: "current",
-                        label: "Current Password",
-                        ph: "Enter current password",
-                      },
-                      {
-                        key: "newPass",
-                        label: "New Password",
-                        ph: "Enter new password",
-                      },
-                      {
-                        key: "confirm",
-                        label: "Confirm New Password",
-                        ph: "Repeat new password",
-                      },
-                    ].map((f) => (
-                      <div className="form-field" key={f.key}>
-                        <label>{f.label}</label>
-                        <div style={{ position: "relative" }}>
-                          <input
-                            type={showPass[f.key] ? "text" : "password"}
-                            placeholder={f.ph}
-                            value={passForm[f.key]}
-                            onChange={(e) =>
-                              setPassForm((p) => ({
-                                ...p,
-                                [f.key]: e.target.value,
-                              }))
-                            }
-                            style={{ width: "100%", paddingRight: 40 }}
-                          />
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setShowPass((p) => ({ ...p, [f.key]: !p[f.key] }))
-                            }
-                            style={{
-                              position: "absolute",
-                              right: 10,
-                              top: "50%",
-                              transform: "translateY(-50%)",
-                              background: "none",
-                              border: "none",
-                              cursor: "pointer",
-                              color: "#aaa",
-                            }}
-                          >
-                            {showPass[f.key] ? (
-                              <EyeOff size={16} />
-                            ) : (
-                              <Eye size={16} />
-                            )}
-                          </button>
-                        </div>
-                        {f.key === "newPass" && passForm.newPass && (
-                          <StrengthBar password={passForm.newPass} />
-                        )}
-                      </div>
-                    ))}
-                    <p style={{ fontSize: 12, color: "#888" }}>
-                      After verifying your current password, we'll send an OTP
-                      to <strong>{user?.email}</strong> to confirm the change.
-                    </p>
-                    <div className="profile-form-actions">
-                      <button
-                        className="btn btn-primary"
-                        onClick={requestPassOtp}
-                        disabled={passLoading}
-                      >
-                        {passLoading
-                          ? "Sending OTP…"
-                          : "Continue → Verify via Email"}
-                      </button>
-                      <button
-                        className="btn btn-secondary"
-                        onClick={() => cancelSection("pass")}
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="verify-step">
-                    <h4>📧 Confirm password change</h4>
-                    <p>
-                      We sent a 6-digit OTP to <strong>{user?.email}</strong>.
-                      Enter it to confirm your new password.
-                    </p>
-                    <div className="otp-input-row">
-                      <input
-                        type="text"
-                        maxLength={6}
-                        placeholder="000000"
-                        value={passOtp}
-                        onChange={(e) =>
-                          setPassOtp(e.target.value.replace(/\D/g, ""))
-                        }
-                      />
-                      <button
-                        className="resend-btn"
-                        onClick={() => {
-                          setPassCooldown(60);
-                          requestPassOtp();
-                        }}
-                        disabled={passCooldown > 0}
-                      >
-                        {passCooldown > 0
-                          ? `Resend (${passCooldown}s)`
-                          : "Resend"}
-                      </button>
-                    </div>
-                    <div
-                      className="profile-form-actions"
-                      style={{ marginTop: 14 }}
-                    >
-                      <button
-                        className="btn btn-primary"
-                        onClick={verifyPassOtp}
-                        disabled={passLoading}
-                      >
-                        {passLoading ? (
-                          "Changing…"
-                        ) : (
-                          <>
-                            <ShieldCheck size={14} /> Confirm Change
-                          </>
-                        )}
-                      </button>
-                      <button
-                        className="btn btn-secondary"
-                        onClick={() => cancelSection("pass")}
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
+          <div className="profile-section">
+            <div className="profile-section-header">
+              <h3>
+                <Lock size={16} /> Change Password
+              </h3>
+              {!editPass && (
+                <button
+                  className="edit-toggle"
+                  onClick={() => setEditPass(true)}
+                >
+                  <Pencil size={13} /> Change
+                </button>
+              )}
             </div>
-          )}
+            <div className="profile-section-body">
+              <Alert type={passMsg.type} msg={passMsg.text} />
+              {!editPass ? (
+                <div className="field-display">
+                  <div className="field-row">
+                    <label>Password</label>
+                    <span className="field-val">••••••••••</span>
+                  </div>
+                </div>
+              ) : passStep === 1 ? (
+                <div className="profile-form">
+                  {[
+                    {
+                      key: "current",
+                      label: "Current Password",
+                      ph: "Enter current password",
+                    },
+                    {
+                      key: "newPass",
+                      label: "New Password",
+                      ph: "Enter new password",
+                    },
+                    {
+                      key: "confirm",
+                      label: "Confirm New Password",
+                      ph: "Repeat new password",
+                    },
+                  ].map((f) => (
+                    <div className="form-field" key={f.key}>
+                      <label>{f.label}</label>
+                      <div style={{ position: "relative" }}>
+                        <input
+                          type={showPass[f.key] ? "text" : "password"}
+                          placeholder={f.ph}
+                          value={passForm[f.key]}
+                          onChange={(e) =>
+                            setPassForm((p) => ({
+                              ...p,
+                              [f.key]: e.target.value,
+                            }))
+                          }
+                          style={{ width: "100%", paddingRight: 40 }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setShowPass((p) => ({ ...p, [f.key]: !p[f.key] }))
+                          }
+                          style={{
+                            position: "absolute",
+                            right: 10,
+                            top: "50%",
+                            transform: "translateY(-50%)",
+                            background: "none",
+                            border: "none",
+                            cursor: "pointer",
+                            color: "#aaa",
+                          }}
+                        >
+                          {showPass[f.key] ? (
+                            <EyeOff size={16} />
+                          ) : (
+                            <Eye size={16} />
+                          )}
+                        </button>
+                      </div>
+                      {f.key === "newPass" && passForm.newPass && (
+                        <StrengthBar password={passForm.newPass} />
+                      )}
+                    </div>
+                  ))}
+                  <p style={{ fontSize: 12, color: "#888" }}>
+                    After verifying your current password, we'll send an OTP to{" "}
+                    <strong>{user?.email}</strong>.
+                  </p>
+                  <div className="profile-form-actions">
+                    <button
+                      className="btn btn-primary"
+                      onClick={requestPassOtp}
+                      disabled={passLoading}
+                    >
+                      {passLoading
+                        ? "Sending OTP…"
+                        : "Continue → Verify via Email"}
+                    </button>
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => cancelSection("pass")}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="verify-step">
+                  <h4>📧 Confirm password change</h4>
+                  <p>
+                    We sent a 6-digit OTP to <strong>{user?.email}</strong>.
+                  </p>
+                  <div className="otp-input-row">
+                    <input
+                      type="text"
+                      maxLength={6}
+                      placeholder="000000"
+                      value={passOtp}
+                      onChange={(e) =>
+                        setPassOtp(e.target.value.replace(/\D/g, ""))
+                      }
+                    />
+                    <button
+                      className="resend-btn"
+                      onClick={() => {
+                        setPassCooldown(60);
+                        requestPassOtp();
+                      }}
+                      disabled={passCooldown > 0}
+                    >
+                      {passCooldown > 0
+                        ? `Resend (${passCooldown}s)`
+                        : "Resend"}
+                    </button>
+                  </div>
+                  <div
+                    className="profile-form-actions"
+                    style={{ marginTop: 14 }}
+                  >
+                    <button
+                      className="btn btn-primary"
+                      onClick={verifyPassOtp}
+                      disabled={passLoading}
+                    >
+                      {passLoading ? (
+                        "Changing…"
+                      ) : (
+                        <>
+                          <ShieldCheck size={14} /> Confirm Change
+                        </>
+                      )}
+                    </button>
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => cancelSection("pass")}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>

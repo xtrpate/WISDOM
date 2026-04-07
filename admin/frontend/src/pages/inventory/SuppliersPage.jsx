@@ -1,1 +1,1 @@
-export { SuppliersPage as default } from './BuildMaterialsPage';
+export { SuppliersPage as default } from "./BuildMaterialsPage";

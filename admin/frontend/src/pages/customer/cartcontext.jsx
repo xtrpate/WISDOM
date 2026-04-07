@@ -9,7 +9,7 @@ const CartContext = createContext();
 export function CartProvider({ children }) {
   const [cart, setCart] = useState(() => {
     try {
-      const saved = sessionStorage.getItem("cust_cart");
+      const saved = localStorage.getItem("cust_cart");
       return saved ? JSON.parse(saved) : [];
     } catch {
       return [];
@@ -18,7 +18,7 @@ export function CartProvider({ children }) {
 
   /* Sync to sessionStorage whenever cart changes */
   useEffect(() => {
-    sessionStorage.setItem("cust_cart", JSON.stringify(cart));
+    localStorage.setItem("cust_cart", JSON.stringify(cart));
   }, [cart]);
 
   const addToCart = (item) => {

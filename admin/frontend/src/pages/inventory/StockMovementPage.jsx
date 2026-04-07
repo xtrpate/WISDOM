@@ -1,1 +1,1 @@
-export { StockMovementPage as default } from './BuildMaterialsPage';
+export { StockMovementPage as default } from "./BuildMaterialsPage";

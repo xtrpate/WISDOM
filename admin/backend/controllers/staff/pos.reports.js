@@ -3,7 +3,6 @@ const db = require("../../config/db");
 
 exports.getReports = async (req, res) => {
   try {
-    // 👉 1. We added 'source' to catch the frontend dropdown value!
     const { period = "daily", from, to, source = "all" } = req.query;
 
     console.log("\n--- 📊 NEW REPORT REQUEST ---");
@@ -14,23 +13,31 @@ exports.getReports = async (req, res) => {
       source,
     });
 
-    let whereClause = "WHERE o.status != 'cancelled'";
+    // 👉 DIAGNOSTIC FIX: Start with a purely positive WHERE clause
+    // We will ONLY filter out completely empty rows, ignoring status for a moment
+    let whereClause = "WHERE o.id IS NOT NULL";
     let queryParams = [];
 
     // Apply Date Filters
     if (from && to) {
       whereClause += " AND DATE(o.created_at) BETWEEN ? AND ?";
       queryParams.push(from, to);
+    } else {
+      whereClause += " AND DATE(o.created_at) = CURDATE()";
     }
 
-    // 👉 2. Apply the new Source Filter!
+    // Apply the Source Filter
     if (source === "online") {
       whereClause += " AND o.type = 'online'";
     } else if (source === "walk_in") {
-      whereClause += " AND o.type = 'walkin'"; // Matches your DB schema exactly
+      whereClause += " AND o.type = 'walkin'";
     }
 
+    // Now we add the status filter back, but safely handling NULLs
+    whereClause += " AND (o.status != 'cancelled' OR o.status IS NULL)";
+
     console.log("2. SQL Where Clause:", whereClause);
+    console.log("   SQL Params:", queryParams);
 
     // Fetch Totals
     const [totalsRows] = await db.execute(
@@ -38,7 +45,7 @@ exports.getReports = async (req, res) => {
         COUNT(*) as total_orders,
         COALESCE(SUM(o.total), 0) as grand_total,
         COALESCE(SUM(o.discount), 0) as total_discount,
-        COALESCE(SUM(o.total_profit), 0) as estimated_profit
+        0 as estimated_profit 
       FROM orders o ${whereClause}`,
       queryParams,
     );
@@ -69,7 +76,6 @@ exports.getReports = async (req, res) => {
     );
 
     // Fetch Transactions
-    // 👉 3. Added 'customer_phone' so the React table stops saying "No phone"
     const [transactionRows] = await db.execute(
       `SELECT 
         o.id as order_id, 
@@ -83,8 +89,8 @@ exports.getReports = async (req, res) => {
         o.discount, 
         o.total, 
         o.type,
-        o.total_profit AS estimated_profit 
-      FROM orders o 
+        0 AS estimated_profit 
+      FROM orders o
       LEFT JOIN receipts r ON o.id = r.order_id 
       LEFT JOIN users c ON o.customer_id = c.id 
       ${whereClause} 

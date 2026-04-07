@@ -38,10 +38,13 @@ export default function ImportPage() {
   const [comments, setComments] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
-  const allReady = useMemo(
-    () => REFERENCE_VIEWS.every((item) => !!files[item.key]),
+  const uploadedCount = useMemo(
+    () => REFERENCE_VIEWS.filter((item) => !!files[item.key]).length,
     [files],
   );
+
+  const hasAnyFile = uploadedCount > 0;
+  const isFullFiveViewSet = uploadedCount === REFERENCE_VIEWS.length;
 
   useEffect(() => {
     return () => {
@@ -105,8 +108,8 @@ export default function ImportPage() {
   };
 
   const handleImport = async () => {
-    if (!allReady) {
-      toast.error("Complete all 5 reference views first.");
+    if (!hasAnyFile) {
+      toast.error("Upload at least one reference image or PDF.");
       return;
     }
 
@@ -132,23 +135,46 @@ export default function ImportPage() {
         designData.ai3d.sourceImageUrl = "";
       }
 
-      designData.components = [];
-      designData.traceObjects = [];
-      designData.referenceCalibration = {
+      const emptyCalibration = {
         points: [],
         realDistanceMm: 0,
         pixelsPerMm: 0,
         isCalibrated: false,
       };
+
+      designData.components = [];
+      designData.traceObjects = [];
+      designData.traceObjectsByView = {
+        front: [],
+        back: [],
+        left: [],
+        right: [],
+        top: [],
+      };
+      designData.referenceCalibration = emptyCalibration;
+      designData.referenceCalibrationByView = {
+        front: { ...emptyCalibration },
+        back: { ...emptyCalibration },
+        left: { ...emptyCalibration },
+        right: { ...emptyCalibration },
+        top: { ...emptyCalibration },
+      };
       designData.importComments = comments || "";
       designData.editorMode = "reference";
+      designData.startMode = "reference";
+      designData.referenceImportMode = isFullFiveViewSet
+        ? "full-5-view"
+        : "partial";
 
       const formData = new FormData();
-      formData.append("front_reference", files.front);
-      formData.append("back_reference", files.back);
-      formData.append("left_reference", files.left);
-      formData.append("right_reference", files.right);
-      formData.append("top_reference", files.top);
+
+      REFERENCE_VIEWS.forEach((item) => {
+        const file = files[item.key];
+        if (file) {
+          formData.append(`${item.key}_reference`, file);
+        }
+      });
+
       formData.append("design_data", JSON.stringify(designData));
 
       await api.put(`/blueprints/${id}`, formData, {
@@ -157,7 +183,12 @@ export default function ImportPage() {
         },
       });
 
-      toast.success("5-view references imported successfully!");
+      toast.success(
+        isFullFiveViewSet
+          ? "5-view references imported successfully!"
+          : "Reference file imported successfully!",
+      );
+
       navigate(`/blueprints/${id}/design`);
     } catch (error) {
       console.error("handleImport error:", error);
@@ -168,10 +199,6 @@ export default function ImportPage() {
     } finally {
       setIsSaving(false);
     }
-  };
-
-  const handleGenerate = () => {
-    toast("AI Blueprint Generation coming soon!", { icon: "🚧" });
   };
 
   return (
@@ -205,12 +232,13 @@ export default function ImportPage() {
             color: "#f8fafc",
           }}
         >
-          Import 5-View Blueprint References
+          Import Reference Views
         </h2>
 
         <p style={{ margin: "0 0 20px", fontSize: 13, color: "#94a3b8" }}>
-          Upload Front, Back, Left, Right, and Top references. All 5 views are
-          required before import.
+          You may upload a single reference image, a partial set, or a full
+          5-view set. Front / side / top combinations are supported, but full
+          5-view import is still recommended for better tracing.
         </p>
 
         <div
@@ -241,7 +269,9 @@ export default function ImportPage() {
                 <div
                   onClick={() => openPicker(item.key)}
                   style={{
-                    border: hasFile ? "2px solid #0ea5e9" : "2px dashed #475569",
+                    border: hasFile
+                      ? "2px solid #0ea5e9"
+                      : "2px dashed #475569",
                     borderRadius: 10,
                     minHeight: 220,
                     display: "flex",
@@ -418,13 +448,15 @@ export default function ImportPage() {
             style={{
               flex: 1,
               fontSize: 12,
-              color: allReady ? "#10b981" : "#f43f5e",
+              color: hasAnyFile ? "#10b981" : "#f43f5e",
               fontWeight: 600,
             }}
           >
-            {allReady
-              ? "All 5 reference views uploaded ✓"
-              : "⚠️ Complete Front / Back / Left / Right / Top first"}
+            {hasAnyFile
+              ? `${uploadedCount} reference view${uploadedCount === 1 ? "" : "s"} selected${
+                  isFullFiveViewSet ? " · full 5-view set ✓" : ""
+                }`
+              : "⚠️ Upload at least one reference view first"}
           </div>
 
           <button
@@ -443,37 +475,24 @@ export default function ImportPage() {
           </button>
 
           <button
-            onClick={handleGenerate}
-            disabled={!allReady}
-            style={{
-              padding: "10px 18px",
-              borderRadius: 6,
-              border: "1px solid #7c3aed",
-              background: "rgba(124, 58, 237, 0.15)",
-              color: "#c4b5fd",
-              cursor: allReady ? "pointer" : "not-allowed",
-              fontWeight: 600,
-              opacity: allReady ? 1 : 0.5,
-            }}
-          >
-            ✨ Generate Blueprint
-          </button>
-
-          <button
             onClick={handleImport}
-            disabled={!allReady || isSaving}
+            disabled={!hasAnyFile || isSaving}
             style={{
               padding: "10px 24px",
               borderRadius: 6,
               border: "none",
               background: "#0ea5e9",
               color: "#fff",
-              cursor: allReady && !isSaving ? "pointer" : "not-allowed",
+              cursor: hasAnyFile && !isSaving ? "pointer" : "not-allowed",
               fontWeight: 600,
-              opacity: allReady && !isSaving ? 1 : 0.5,
+              opacity: hasAnyFile && !isSaving ? 1 : 0.5,
             }}
           >
-            {isSaving ? "Importing..." : "📥 Import 5 Views"}
+            {isSaving
+              ? "Importing..."
+              : isFullFiveViewSet
+                ? "📥 Import 5 Views"
+                : "📥 Import References"}
           </button>
         </div>
       </div>

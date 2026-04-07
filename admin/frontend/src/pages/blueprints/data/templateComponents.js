@@ -808,7 +808,10 @@ function createImportedFurnitureComponents(
   blueprintData = {},
   worldSize = { w: 6400, h: 3200, d: 5200 },
 ) {
-  const templateType = getImportedFurnitureTemplateType(savedData, blueprintData);
+  const templateType = getImportedFurnitureTemplateType(
+    savedData,
+    blueprintData,
+  );
 
   const defaults =
     IMPORT_TEMPLATE_DEFAULTS[templateType] ||
@@ -1179,11 +1182,20 @@ function createImportedDiningChairComponents(
   );
 }
 
-
 const TEMPLATE_LIBRARY_SPECS = [
   {
     label: "Wooden Dining Table",
     type: "template_dining_table",
+    category: "Furniture Templates",
+    fill: "#be9366",
+    material: "Oak Wood",
+    unitPrice: 9800,
+    blueprintStyle: "assembly_template",
+    cornerRadius: 0,
+    thumbnailPng: "/library-thumbs/wooden-dining-table.png",
+    w: 1800,
+    h: 760,
+    d: 900,
   },
   {
     label: "Wooden Bed Frame",
@@ -1268,10 +1280,7 @@ function getChairTemplatePartGroups() {
 }
 
 function getTemplateLibraryPartGroups() {
-  return [
-    ...getFurnitureTemplatePartGroups(),
-    ...getChairTemplatePartGroups(),
-  ];
+  return [...getFurnitureTemplatePartGroups(), ...getChairTemplatePartGroups()];
 }
 
 function getChairManualPlacement(
@@ -1405,8 +1414,6 @@ function getChairManualPlacement(
       };
   }
 }
-
-
 
 function getChairExplodedBox(comp, groupComponents) {
   const slatIndex = groupComponents

@@ -18,6 +18,43 @@ const TABS = ["my", "imports", "gallery", "archive"];
 const ALLOWED_IMPORT_EXTENSIONS = ["pdf", "png", "jpg", "jpeg", "svg"];
 const MAX_IMPORT_FILE_SIZE_MB = 15;
 
+const CREATE_MODES = [
+  { value: "scratch", label: "Scratch Design" },
+  { value: "template", label: "From Template" },
+  { value: "reference", label: "Reference Import" },
+];
+
+const FURNITURE_TYPE_OPTIONS = [
+  { value: "cabinet", label: "Cabinet / Wardrobe" },
+  { value: "table", label: "Dining Table" },
+  { value: "bed", label: "Bed Frame" },
+  { value: "chair", label: "Dining Chair" },
+  { value: "coffee_table", label: "Coffee Table" },
+];
+
+const DEFAULT_CREATE_FORM = {
+  title: "",
+  startMode: "scratch",
+  furnitureType: "cabinet",
+  width: "2400",
+  height: "2400",
+  depth: "600",
+};
+
+const EMPTY_REFERENCE_FILES = {
+  front: null,
+  back: null,
+  left: null,
+  right: null,
+  top: null,
+};
+
+function snapMm(value, fallback) {
+  const num = Number(value);
+  if (!Number.isFinite(num) || num <= 0) return fallback;
+  return Math.max(20, Math.round(num / 20) * 20);
+}
+
 function formatDate(value) {
   if (!value) return "—";
   const date = new Date(value);
@@ -58,6 +95,39 @@ function getBlueprintIcon(fileType) {
   return "🗺️";
 }
 
+function canEstimateAtStage(stage = "") {
+  return ["design", "estimation", "approval"].includes(
+    String(stage || "").toLowerCase(),
+  );
+}
+
+function getDesignActionLabel(stage = "", isImported = false) {
+  const normalizedStage = String(stage || "").toLowerCase();
+  const isViewOnlyStage = ["production", "delivery", "completed"].includes(
+    normalizedStage,
+  );
+
+  if (isImported) {
+    return isViewOnlyStage ? "🧩 View Design" : "🧩 Open Design";
+  }
+
+  return isViewOnlyStage ? "👁 View Design" : "✏️ Design";
+}
+
+function getStageLabel(stage = "") {
+  const normalized = String(stage || "").toLowerCase();
+
+  if (normalized === "design") return "Design";
+  if (normalized === "estimation") return "Estimation";
+  if (normalized === "approval") return "Approval";
+  if (normalized === "production") return "Production";
+  if (normalized === "delivery") return "Delivery";
+  if (normalized === "completed") return "Completed";
+  if (normalized === "archived") return "Archived";
+
+  return normalized || "Design";
+}
+
 export default function BlueprintsPage() {
   const navigate = useNavigate();
 
@@ -70,7 +140,7 @@ export default function BlueprintsPage() {
   const [importing, setImporting] = useState(false);
 
   const [createModal, setCreateModal] = useState(false);
-  const [createTitle, setCreateTitle] = useState("");
+  const [createForm, setCreateForm] = useState(DEFAULT_CREATE_FORM);
   const [creating, setCreating] = useState(false);
 
   const [deletingId, setDeletingId] = useState(null);
@@ -83,6 +153,7 @@ export default function BlueprintsPage() {
   const [archiveConfirmModal, setArchiveConfirmModal] = useState(false);
   const [archiveTarget, setArchiveTarget] = useState(null);
 
+  const [imageErrors, setImageErrors] = useState({});
   const load = useCallback(async () => {
     try {
       const { data } = await api.get("/blueprints", {
@@ -128,6 +199,16 @@ export default function BlueprintsPage() {
     } finally {
       setArchivingId(null);
     }
+  };
+
+  const updateCreateForm = (key, value) => {
+    setCreateForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const closeCreateModal = () => {
+    if (creating) return;
+    setCreateModal(false);
+    setCreateForm(DEFAULT_CREATE_FORM);
   };
 
   const handleRestore = async (id) => {
@@ -220,10 +301,72 @@ export default function BlueprintsPage() {
   const handleCreateBlueprint = async (e) => {
     e.preventDefault();
 
-    if (!createTitle.trim()) {
+    if (!createForm.title.trim()) {
       toast.error("Please enter a blueprint title.");
       return;
     }
+
+    const width = snapMm(createForm.width, 2400);
+    const height = snapMm(createForm.height, 2400);
+    const depth = snapMm(createForm.depth, 600);
+
+    const templateTypeMap = {
+      cabinet: "template_closet_wardrobe",
+      table: "template_dining_table",
+      bed: "template_bed_frame",
+      chair: "template_dining_chair",
+      coffee_table: "template_coffee_table",
+    };
+
+    const importTemplateType =
+      templateTypeMap[createForm.furnitureType] || "template_closet_wardrobe";
+
+    const emptyCalibration = {
+      points: [],
+      realDistanceMm: 0,
+      pixelsPerMm: 0,
+      isCalibrated: false,
+    };
+
+    const designSeed = {
+      startMode: createForm.startMode,
+      furnitureType: createForm.furnitureType,
+      unit: "mm",
+      editorMode:
+        createForm.startMode === "reference" ? "reference" : "editable",
+      importTemplateType,
+      importDimensions: {
+        w: width,
+        h: height,
+        d: depth,
+      },
+      blueprintSetup: {
+        startMode: createForm.startMode,
+        furnitureType: createForm.furnitureType,
+        overallWidth: width,
+        overallHeight: height,
+        overallDepth: depth,
+        unit: "mm",
+      },
+      components: [],
+      reference_files: EMPTY_REFERENCE_FILES,
+      traceObjects: [],
+      traceObjectsByView: {
+        front: [],
+        back: [],
+        left: [],
+        right: [],
+        top: [],
+      },
+      referenceCalibration: emptyCalibration,
+      referenceCalibrationByView: {
+        front: { ...emptyCalibration },
+        back: { ...emptyCalibration },
+        left: { ...emptyCalibration },
+        right: { ...emptyCalibration },
+        top: { ...emptyCalibration },
+      },
+    };
 
     setCreating(true);
 
@@ -232,15 +375,17 @@ export default function BlueprintsPage() {
 
       try {
         res = await api.post("/blueprints", {
-          title: createTitle.trim(),
+          title: createForm.title.trim(),
           source: "created",
           stage: "design",
+          design_data: JSON.stringify(designSeed),
         });
       } catch {
         const fd = new FormData();
-        fd.append("title", createTitle.trim());
+        fd.append("title", createForm.title.trim());
         fd.append("source", "created");
         fd.append("stage", "design");
+        fd.append("design_data", JSON.stringify(designSeed));
 
         res = await api.post("/blueprints", fd, {
           headers: { "Content-Type": "multipart/form-data" },
@@ -255,9 +400,14 @@ export default function BlueprintsPage() {
       }
 
       toast.success("Blueprint created.");
-      setCreateModal(false);
-      setCreateTitle("");
-      navigate(`/admin/blueprints/${newId}/design`);
+      closeCreateModal();
+
+      if (createForm.startMode === "reference") {
+        navigate(`/blueprints/${newId}/import`);
+        return;
+      }
+
+      navigate(`/blueprints/${newId}/design`);
     } catch (err) {
       toast.error(
         err?.response?.data?.message ||
@@ -386,14 +536,21 @@ export default function BlueprintsPage() {
           }}
         >
           {items.map((bp) => {
-            const [stageBg, stageColor] = STAGE_COLORS[bp.stage] || [
+            const displayStage = String(
+              bp.display_stage || bp.stage || "design",
+            ).toLowerCase();
+            const [stageBg, stageColor] = STAGE_COLORS[displayStage] || [
               "#f1f5f9",
               "#475569",
             ];
             const isTemplate = Number(bp.is_template) === 1;
-            const hasThumbnail = !!bp.thumbnail_url;
+            const hasThumbnail = !!bp.thumbnail_url && !imageErrors[bp.id];
             const isImported =
               String(bp.source || "").toLowerCase() === "imported";
+            const isCompleted = displayStage === "completed";
+            const isFinalStage = ["delivery", "completed"].includes(
+              displayStage,
+            );
             const displayDate =
               tab === "archive"
                 ? bp.archived_at || bp.updated_at || bp.created_at
@@ -404,71 +561,114 @@ export default function BlueprintsPage() {
             const isArchiving = archivingId === bp.id;
             const isBusy = isDeleting || isRestoring || isArchiving;
 
+            const cardBorderColor = isCompleted
+              ? "#bbf7d0"
+              : isFinalStage
+                ? "#bfdbfe"
+                : "#e2e8f0";
+
             return (
               <div
                 key={bp.id}
                 style={{
                   background: "#fff",
-                  borderRadius: 12,
-                  boxShadow: "0 1px 6px rgba(0,0,0,.08)",
+                  borderRadius: 14,
+                  border: `1px solid ${cardBorderColor}`,
+                  boxShadow: isCompleted
+                    ? "0 8px 24px rgba(16,185,129,.08)"
+                    : "0 6px 18px rgba(15,23,42,.06)",
                   overflow: "hidden",
+                  display: "flex",
+                  flexDirection: "column",
+                  minHeight: 262,
+                  transition: "all .2s ease",
                 }}
               >
                 <div
                   style={{
-                    height: 140,
-                    background: "linear-gradient(135deg, #e0f2fe, #ddd6fe)",
+                    height: 126,
+                    background: hasThumbnail
+                      ? "#e5e7eb"
+                      : isCompleted
+                        ? "linear-gradient(135deg, #ecfdf5, #d1fae5)"
+                        : "linear-gradient(135deg, #e0f2fe, #ddd6fe)",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
                     position: "relative",
+                    overflow: "hidden",
                   }}
                 >
                   {hasThumbnail ? (
                     <img
                       src={bp.thumbnail_url}
-                      alt={bp.title || "Blueprint"}
+                      alt=""
+                      onError={() =>
+                        setImageErrors((prev) => ({
+                          ...prev,
+                          [bp.id]: true,
+                        }))
+                      }
                       style={{
                         width: "100%",
                         height: "100%",
                         objectFit: "cover",
+                        display: "block",
                       }}
                     />
                   ) : (
-                    <span style={{ fontSize: 48 }} aria-hidden="true">
-                      {getBlueprintIcon(bp.file_type)}
-                    </span>
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        gap: 6,
+                        color: "#64748b",
+                      }}
+                    >
+                      <span style={{ fontSize: 38 }} aria-hidden="true">
+                        {getBlueprintIcon(bp.file_type)}
+                      </span>
+                      <span style={{ fontSize: 11, fontWeight: 600 }}>
+                        {isCompleted
+                          ? "Completed Blueprint"
+                          : "Blueprint Preview"}
+                      </span>
+                    </div>
                   )}
 
                   <span
                     style={{
                       position: "absolute",
-                      top: 8,
-                      right: 8,
+                      top: 10,
+                      right: 10,
                       background: stageBg,
                       color: stageColor,
-                      padding: "2px 10px",
-                      borderRadius: 12,
+                      padding: "3px 10px",
+                      borderRadius: 999,
                       fontSize: 11,
-                      fontWeight: 600,
-                      textTransform: "capitalize",
+                      fontWeight: 700,
+                      boxShadow: "0 1px 4px rgba(0,0,0,.08)",
+                      whiteSpace: "nowrap",
                     }}
                   >
-                    {bp.stage || "design"}
+                    {getStageLabel(displayStage)}
                   </span>
 
                   {isTemplate && (
                     <span
                       style={{
                         position: "absolute",
-                        top: 8,
-                        left: 8,
+                        top: 10,
+                        left: 10,
                         background: "#fbbf24",
                         color: "#78350f",
-                        padding: "2px 8px",
-                        borderRadius: 12,
+                        padding: "3px 9px",
+                        borderRadius: 999,
                         fontSize: 10,
-                        fontWeight: 700,
+                        fontWeight: 800,
+                        letterSpacing: 0.3,
+                        boxShadow: "0 1px 4px rgba(0,0,0,.08)",
                       }}
                     >
                       TEMPLATE
@@ -479,9 +679,9 @@ export default function BlueprintsPage() {
                     <span
                       style={{
                         position: "absolute",
-                        bottom: 8,
-                        right: 8,
-                        background: "rgba(15, 23, 42, 0.8)",
+                        bottom: 10,
+                        right: 10,
+                        background: "rgba(15, 23, 42, 0.82)",
                         color: "#fff",
                         padding: "3px 8px",
                         borderRadius: 999,
@@ -496,50 +696,73 @@ export default function BlueprintsPage() {
                   )}
                 </div>
 
-                <div style={{ padding: 16 }}>
+                <div
+                  style={{
+                    padding: 14,
+                    display: "flex",
+                    flexDirection: "column",
+                    flex: 1,
+                  }}
+                >
                   <h3
                     style={{
-                      margin: "0 0 4px",
-                      fontSize: 14,
-                      fontWeight: 600,
-                      color: "#1e2a38",
+                      margin: "0 0 6px",
+                      fontSize: 15,
+                      fontWeight: 700,
+                      color: "#1e293b",
+                      lineHeight: 1.35,
+                      minHeight: 40,
+                      display: "-webkit-box",
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: "vertical",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      wordBreak: "break-word",
                     }}
                   >
                     {bp.title || "Untitled Blueprint"}
                   </h3>
 
-                  {!!bp.client_name && (
-                    <p
-                      style={{
-                        fontSize: 11,
-                        color: "#64748b",
-                        margin: "0 0 4px",
-                      }}
-                    >
-                      Client: {bp.client_name}
-                    </p>
-                  )}
+                  <div style={{ minHeight: 34 }}>
+                    {!!bp.client_name && (
+                      <p
+                        style={{
+                          fontSize: 11,
+                          color: "#64748b",
+                          margin: "0 0 4px",
+                          lineHeight: 1.35,
+                          display: "-webkit-box",
+                          WebkitLineClamp: 1,
+                          WebkitBoxOrient: "vertical",
+                          overflow: "hidden",
+                        }}
+                      >
+                        Client: {bp.client_name}
+                      </p>
+                    )}
 
-                  {isImported && (
-                    <p
-                      style={{
-                        fontSize: 11,
-                        color: "#64748b",
-                        margin: "0 0 4px",
-                      }}
-                    >
-                      Imported reference
-                      {bp.file_type
-                        ? ` · ${String(bp.file_type).toUpperCase()}`
-                        : ""}
-                    </p>
-                  )}
+                    {isImported && (
+                      <p
+                        style={{
+                          fontSize: 11,
+                          color: "#64748b",
+                          margin: "0 0 4px",
+                          lineHeight: 1.35,
+                        }}
+                      >
+                        Imported reference
+                        {bp.file_type
+                          ? ` · ${String(bp.file_type).toUpperCase()}`
+                          : ""}
+                      </p>
+                    )}
+                  </div>
 
                   <p
                     style={{
                       fontSize: 11,
                       color: "#94a3b8",
-                      margin: "0 0 12px",
+                      margin: "0 0 14px",
                     }}
                   >
                     By {bp.creator_name || "Admin"} · {formatDate(displayDate)}
@@ -563,17 +786,34 @@ export default function BlueprintsPage() {
                     </p>
                   )}
 
-                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  <div
+                    style={{
+                      marginTop: "auto",
+                      paddingTop: 12,
+                      borderTop: "1px solid #f1f5f9",
+                      display: "flex",
+                      gap: 6,
+                      flexWrap: "wrap",
+                    }}
+                  >
                     {tab !== "archive" ? (
                       <>
                         <button
                           onClick={() =>
-                            navigate(`/admin/blueprints/${bp.id}/design`)
+                            navigate(`/blueprints/${bp.id}/design`)
                           }
-                          style={btnEdit}
+                          style={
+                            isCompleted
+                              ? {
+                                  ...btnEdit,
+                                  background: "#eff6ff",
+                                  color: "#1d4ed8",
+                                }
+                              : btnEdit
+                          }
                           disabled={isBusy}
                         >
-                          {isImported ? "🧩 Open Design" : "✏️ Design"}
+                          {getDesignActionLabel(displayStage, isImported)}
                         </button>
 
                         {isImported && !!bp.file_url && (
@@ -590,26 +830,26 @@ export default function BlueprintsPage() {
                           </button>
                         )}
 
-                        <button
-                          onClick={() =>
-                            navigate(`/admin/blueprints/${bp.id}/estimation`)
-                          }
-                          style={{
-                            ...btnEdit,
-                            background: "#f3e8ff",
-                            color: "#6b21a8",
-                          }}
-                          disabled={isBusy}
-                        >
-                          💰 Estimate
-                        </button>
+                        {canEstimateAtStage(displayStage) && (
+                          <button
+                            onClick={() =>
+                              navigate(`/blueprints/${bp.id}/estimation`)
+                            }
+                            style={{
+                              ...btnEdit,
+                              background: "#f3e8ff",
+                              color: "#6b21a8",
+                            }}
+                            disabled={isBusy}
+                          >
+                            💰 Estimate
+                          </button>
+                        )}
 
                         <button
                           onClick={() => openArchiveConfirm(bp)}
                           style={{
-                            ...btnEdit,
-                            background: "#f1f5f9",
-                            color: "#64748b",
+                            ...btnGhostMini,
                             opacity: isArchiving ? 0.7 : 1,
                             cursor: isArchiving ? "not-allowed" : "pointer",
                           }}
@@ -749,19 +989,122 @@ export default function BlueprintsPage() {
 
       {createModal && (
         <div style={overlay}>
-          <div style={modalBox}>
-            <h3 style={{ margin: "0 0 20px" }}>Create New Blueprint</h3>
+          <div style={{ ...modalBox, width: 580 }}>
+            <h3 style={{ margin: "0 0 18px" }}>Create New Blueprint</h3>
 
             <form onSubmit={handleCreateBlueprint}>
               <div style={{ marginBottom: 12 }}>
                 <label style={labelSm}>Blueprint Title *</label>
                 <input
                   required
-                  value={createTitle}
-                  onChange={(e) => setCreateTitle(e.target.value)}
+                  value={createForm.title}
+                  onChange={(e) => updateCreateForm("title", e.target.value)}
                   style={inputFull}
                   placeholder="Enter blueprint title"
                 />
+              </div>
+
+              <div style={{ marginBottom: 12 }}>
+                <label style={labelSm}>Start Mode *</label>
+                <select
+                  value={createForm.startMode}
+                  onChange={(e) =>
+                    updateCreateForm("startMode", e.target.value)
+                  }
+                  style={inputFull}
+                >
+                  {CREATE_MODES.map((mode) => (
+                    <option key={mode.value} value={mode.value}>
+                      {mode.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ marginBottom: 12 }}>
+                <label style={labelSm}>Furniture Type *</label>
+                <select
+                  value={createForm.furnitureType}
+                  onChange={(e) =>
+                    updateCreateForm("furnitureType", e.target.value)
+                  }
+                  style={inputFull}
+                >
+                  {FURNITURE_TYPE_OPTIONS.map((item) => (
+                    <option key={item.value} value={item.value}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                  gap: 10,
+                  marginBottom: 14,
+                }}
+              >
+                <div>
+                  <label style={labelSm}>Overall Width (mm)</label>
+                  <input
+                    type="number"
+                    min="20"
+                    step="20"
+                    value={createForm.width}
+                    onChange={(e) => updateCreateForm("width", e.target.value)}
+                    style={inputFull}
+                  />
+                </div>
+
+                <div>
+                  <label style={labelSm}>Overall Height (mm)</label>
+                  <input
+                    type="number"
+                    min="20"
+                    step="20"
+                    value={createForm.height}
+                    onChange={(e) => updateCreateForm("height", e.target.value)}
+                    style={inputFull}
+                  />
+                </div>
+
+                <div>
+                  <label style={labelSm}>Overall Depth (mm)</label>
+                  <input
+                    type="number"
+                    min="20"
+                    step="20"
+                    value={createForm.depth}
+                    onChange={(e) => updateCreateForm("depth", e.target.value)}
+                    style={inputFull}
+                  />
+                </div>
+              </div>
+
+              <div
+                style={{
+                  marginBottom: 16,
+                  padding: "10px 12px",
+                  borderRadius: 8,
+                  background: "#f8fafc",
+                  border: "1px solid #e2e8f0",
+                  fontSize: 12,
+                  color: "#475569",
+                  lineHeight: 1.7,
+                }}
+              >
+                <div>
+                  <strong>Unit:</strong> MM only
+                </div>
+                <div>
+                  {createForm.startMode === "reference"
+                    ? "After create, this will open the reference import page."
+                    : createForm.startMode === "template"
+                      ? "After create, this will open the editor with a starter furniture template."
+                      : "After create, this will open the front-view editor."}
+                </div>
               </div>
 
               <div
@@ -769,7 +1112,7 @@ export default function BlueprintsPage() {
               >
                 <button
                   type="button"
-                  onClick={() => setCreateModal(false)}
+                  onClick={closeCreateModal}
                   style={btnGhost}
                 >
                   Cancel
@@ -779,117 +1122,6 @@ export default function BlueprintsPage() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
-
-      {archiveConfirmModal && archiveTarget && (
-        <div style={overlay}>
-          <div style={{ ...modalBox, width: 430 }}>
-            <div
-              style={{
-                width: 52,
-                height: 52,
-                borderRadius: "50%",
-                background: "#fef3c7",
-                color: "#b45309",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: 24,
-                marginBottom: 16,
-              }}
-            >
-              🗃️
-            </div>
-
-            <h3
-              style={{
-                margin: "0 0 10px",
-                fontSize: 20,
-                fontWeight: 700,
-                color: "#1e293b",
-              }}
-            >
-              Archive Blueprint?
-            </h3>
-
-            <p
-              style={{
-                margin: "0 0 6px",
-                fontSize: 14,
-                color: "#475569",
-                lineHeight: 1.6,
-              }}
-            >
-              You are about to move this blueprint to archive:
-            </p>
-
-            <div
-              style={{
-                marginBottom: 14,
-                padding: "12px 14px",
-                borderRadius: 10,
-                background: "#f8fafc",
-                border: "1px solid #e2e8f0",
-                fontSize: 14,
-                fontWeight: 700,
-                color: "#1e293b",
-                wordBreak: "break-word",
-              }}
-            >
-              {archiveTarget.title || "Untitled Blueprint"}
-            </div>
-
-            <p
-              style={{
-                margin: "0 0 20px",
-                fontSize: 13,
-                color: "#64748b",
-                lineHeight: 1.6,
-              }}
-            >
-              You can still restore this blueprint later from the Archive tab.
-            </p>
-
-            <div
-              style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}
-            >
-              <button
-                type="button"
-                onClick={closeArchiveConfirm}
-                disabled={archivingId === archiveTarget.id}
-                style={{
-                  ...btnGhost,
-                  opacity: archivingId === archiveTarget.id ? 0.7 : 1,
-                  cursor:
-                    archivingId === archiveTarget.id
-                      ? "not-allowed"
-                      : "pointer",
-                }}
-              >
-                Cancel
-              </button>
-
-              <button
-                type="button"
-                onClick={confirmArchive}
-                disabled={archivingId === archiveTarget.id}
-                style={{
-                  ...btnPrimary,
-                  background: "#f59e0b",
-                  opacity: archivingId === archiveTarget.id ? 0.7 : 1,
-                  cursor:
-                    archivingId === archiveTarget.id
-                      ? "not-allowed"
-                      : "pointer",
-                }}
-              >
-                {archivingId === archiveTarget.id
-                  ? "Archiving..."
-                  : "Yes, Move to Archive"}
-              </button>
-            </div>
           </div>
         </div>
       )}
@@ -1064,6 +1296,16 @@ const btnDelete = {
   background: "#fee2e2",
   color: "#b91c1c",
   border: "none",
+  borderRadius: 6,
+  cursor: "pointer",
+  fontSize: 12,
+};
+
+const btnGhostMini = {
+  padding: "4px 10px",
+  background: "#f8fafc",
+  color: "#64748b",
+  border: "1px solid #e2e8f0",
   borderRadius: 6,
   cursor: "pointer",
   fontSize: 12,
