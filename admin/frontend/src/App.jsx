@@ -76,6 +76,7 @@ import AppointmentPage from "./pages/customer/appointmentpage";
 import OrdersPageCustomer from "./pages/customer/orderspage";
 import WarrantyPageCustomer from "./pages/customer/warrantypage";
 import ProfileSettings from "./pages/customer/profilesettings";
+import LandingPage from "./pages/customer/LandingPage";
 
 // ══════════════════════════════════════════════════════════════════════════════
 // ── Staff Imports ─────────────────────────────────────────────────────────────
@@ -146,6 +147,7 @@ export default function App() {
                 </CartProvider>
               }
             >
+              <Route index element={<LandingPage />} />
               <Route index element={<Navigate to="catalog" replace />} />
               <Route path="catalog" element={<ProductCatalog />} />
               <Route path="cart" element={<CartPage />} />

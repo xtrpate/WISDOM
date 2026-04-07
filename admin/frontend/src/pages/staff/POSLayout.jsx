@@ -86,7 +86,7 @@ export default function POSLayout() {
 
   const handleLogout = () => {
     logout();
-    navigate("/staff/login");
+    window.location.href = "/login";
   };
 
   return (

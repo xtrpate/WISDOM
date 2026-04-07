@@ -469,7 +469,7 @@ export default function OrdersPage() {
       .finally(() => setLoading(false));
   };
 
-  // 👉 NEW: The Smart PayMongo Loader
+  // 👉 The Smart PayMongo Loader
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search);
     const verifySuccess = searchParams.get("verify_success");
@@ -477,14 +477,11 @@ export default function OrdersPage() {
 
     if (verifySuccess === "true" && orderNumber) {
       setLoading(true);
-
-      // Secretly tell the backend to update the database
       axios
         .post("/api/customer/orders/verify-payment", {
           order_number: orderNumber,
         })
         .then(() => {
-          // Clean up the URL so it looks normal again
           window.history.replaceState(
             {},
             document.title,
@@ -493,17 +490,15 @@ export default function OrdersPage() {
         })
         .catch((err) => console.error("Verification error:", err))
         .finally(() => {
-          // Load the updated orders list with green badges!
           fetchOrders();
         });
     } else {
-      // Normal page load
       fetchOrders();
     }
   }, []);
 
   const handleConfirmOrder = async (e, orderId) => {
-    e.stopPropagation(); // Prevent the modal from opening
+    e.stopPropagation();
     if (
       window.confirm(
         "Are you sure you want to confirm that you have received this order?",
@@ -511,7 +506,7 @@ export default function OrdersPage() {
     ) {
       try {
         await axios.put(`/api/customer/orders/${orderId}/confirm`);
-        fetchOrders(); // Refresh to move it to 'Completed'
+        fetchOrders();
       } catch (error) {
         alert("Failed to confirm the order. Please try again.");
       }
@@ -519,17 +514,18 @@ export default function OrdersPage() {
   };
 
   const handleReviewOrder = (e, orderId) => {
-    e.stopPropagation(); // Prevent the modal from opening
-    alert("Review feature coming soon!"); // Replace with your review logic later
+    e.stopPropagation();
+    alert("Review feature coming soon!");
   };
+
   const handleCancelOrder = async (e, orderId) => {
-    e.stopPropagation(); // Prevent the modal from opening
+    e.stopPropagation();
     const reason = window.prompt("Please provide a reason for cancellation:");
 
     if (reason !== null) {
       try {
         await axios.put(`/api/customer/orders/${orderId}/cancel`, { reason });
-        fetchOrders(); // Refresh to move it to the 'Cancelled' tab
+        fetchOrders();
         alert("Order has been cancelled.");
       } catch (error) {
         alert("Failed to cancel the order. Please try again.");
@@ -548,8 +544,30 @@ export default function OrdersPage() {
     { key: "cancelled", label: "Cancelled" },
   ];
 
-  const filtered =
-    filter === "all" ? orders : orders.filter((o) => o.status === filter);
+  // 👉 NEW: Custom Sorting Hierarchy
+  const CUSTOM_SORT_ORDER = {
+    delivered: 1,
+    shipping: 2,
+    production: 3,
+    confirmed: 4,
+    pending: 5,
+    completed: 6,
+    cancelled: 7,
+  };
+
+  // 👉 NEW: Apply the sort logic!
+  const filtered = (
+    filter === "all" ? [...orders] : orders.filter((o) => o.status === filter)
+  ).sort((a, b) => {
+    const rankA = CUSTOM_SORT_ORDER[a.status] || 99;
+    const rankB = CUSTOM_SORT_ORDER[b.status] || 99;
+
+    // Sort by the status hierarchy first
+    if (rankA !== rankB) return rankA - rankB;
+
+    // If they have the same status, put the newest date on top
+    return new Date(b.created_at) - new Date(a.created_at);
+  });
 
   return (
     <div className="orders-page">

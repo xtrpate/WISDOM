@@ -1,12 +1,13 @@
 /**
  * pages/ProductCatalog.jsx
- * Updated: real product images with placeholder fallback
+ * Updated: Connected to global CartContext and removed floating orange cart
  */
 import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { Search, ShoppingCart, Eye, Plus, Minus } from "lucide-react";
 import "./productcatalog.css";
 import BlueprintGallery from "./blueprintgallery";
+import { useCart } from "./cartcontext"; // 👉 NEW: Import the official cart brain!
 
 const API = "http://localhost:5000";
 
@@ -60,13 +61,9 @@ export default function ProductCatalog() {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
-  const [cart, setCart] = useState(() => {
-    try {
-      return JSON.parse(sessionStorage.getItem("cust_cart") || "[]");
-    } catch {
-      return [];
-    }
-  });
+
+  // 👉 NEW: Tap directly into the official CartContext
+  const { addToCart } = useCart();
 
   /* Filters */
   const [search, setSearch] = useState("");
@@ -109,11 +106,6 @@ export default function ProductCatalog() {
     return () => clearTimeout(t);
   }, [fetchProducts]);
 
-  /* Persist cart */
-  useEffect(() => {
-    sessionStorage.setItem("cust_cart", JSON.stringify(cart));
-  }, [cart]);
-
   /* Open modal */
   const openProduct = (product) => {
     setSelected(product);
@@ -136,38 +128,22 @@ export default function ProductCatalog() {
     const stock = Number(product.stock || 0);
     if (stock <= 0) return;
 
-    const key = `${product.id}`;
-
-    setCart((prev) => {
-      const existing = prev.find((i) => i.key === key);
-
-      if (existing) {
-        return prev.map((i) =>
-          i.key === key
-            ? { ...i, quantity: Math.min(i.quantity + 1, stock) }
-            : i,
-        );
-      }
-
-      return [
-        ...prev,
-        {
-          key,
-          product_id: product.id,
-          variation_id: null,
-          product_name: product.name,
-          unit_price: parseFloat(product.online_price),
-          production_cost: product.production_cost ?? 0,
-          quantity: 1,
-          max_stock: stock,
-          image_url: product.image_url || null,
-        },
-      ];
+    // 👉 Send data to the official CartContext
+    addToCart({
+      key: `${product.id}`,
+      product_id: product.id,
+      variation_id: null,
+      product_name: product.name,
+      unit_price: parseFloat(product.online_price),
+      production_cost: product.production_cost ?? 0,
+      quantity: 1,
+      max_stock: stock,
+      image_url: product.image_url || null,
     });
   };
 
-  /* Add to cart */
-  const addToCart = () => {
+  /* Add to cart from Modal */
+  const handleModalAddToCart = () => {
     if (!selected) return;
     const hasVariations = selected.variations?.length > 0;
     if (hasVariations && !selVariation) {
@@ -183,37 +159,22 @@ export default function ProductCatalog() {
       ? `${selected.name} (${selVariation.variation_name})`
       : selected.name;
 
-    setCart((prev) => {
-      const existing = prev.find((i) => i.key === key);
-      if (existing) {
-        return prev.map((i) =>
-          i.key === key
-            ? { ...i, quantity: Math.min(i.quantity + qty, stock) }
-            : i,
-        );
-      }
-      return [
-        ...prev,
-        {
-          key,
-          product_id: selected.id,
-          variation_id: selVariation?.id || null,
-          product_name: name,
-          unit_price: parseFloat(price),
-          production_cost:
-            selVariation?.unit_cost ?? selected.production_cost ?? 0,
-          quantity: qty,
-          max_stock: stock,
-          image_url: selected.image_url || null,
-        },
-      ];
+    // 👉 Send data to the official CartContext
+    addToCart({
+      key,
+      product_id: selected.id,
+      variation_id: selVariation?.id || null,
+      product_name: name,
+      unit_price: parseFloat(price),
+      production_cost: selVariation?.unit_cost ?? selected.production_cost ?? 0,
+      quantity: qty,
+      max_stock: stock,
+      image_url: selected.image_url || null,
     });
 
     setCartMsg(`✓ Added ${qty} × "${name}" to cart!`);
     setTimeout(() => setCartMsg(""), 3000);
   };
-
-  const cartCount = cart.reduce((s, i) => s + i.quantity, 0);
 
   const clearFilters = () => {
     setSearch("");
@@ -232,6 +193,7 @@ export default function ProductCatalog() {
     stockFilter !== "all" ||
     priceMin ||
     priceMax;
+
   const formatTypeLabel = (type) => {
     if (!type) return "";
     if (type === "standard") return "Ready-Made";
@@ -290,11 +252,12 @@ export default function ProductCatalog() {
       onRemove: () => setPriceMax(""),
     },
   ].filter(Boolean);
+
   return (
     <div>
       {/* Page hero */}
       <div className="catalog-breadcrumbs">
-        <button type="button" onClick={() => (window.location.href = "/home")}>
+        <button type="button" onClick={() => (window.location.href = "/")}>
           Home
         </button>
         <span>/</span>
@@ -318,21 +281,7 @@ export default function ProductCatalog() {
           </div>
         </div>
 
-        <div className="catalog-hero-actions">
-          <button
-            className="btn btn-primary catalog-cart-btn"
-            onClick={() => (window.location.href = "/cart")}
-          >
-            <ShoppingCart size={16} /> Cart
-            {cartCount > 0 && (
-              <span className="catalog-cart-badge">{cartCount}</span>
-            )}
-          </button>
-
-          <p className="catalog-cart-note">
-            Review selected items, quantities, and checkout details.
-          </p>
-        </div>
+        {/* 👉 THE ORANGE BOX WAS DELETED FROM HERE! */}
       </div>
 
       <div className="catalog-layout">
@@ -782,7 +731,7 @@ export default function ProductCatalog() {
                   className="btn btn-primary"
                   style={{ flex: 1, justifyContent: "center" }}
                   disabled={selected.stock_status === "out_of_stock"}
-                  onClick={addToCart}
+                  onClick={handleModalAddToCart}
                 >
                   <ShoppingCart size={16} /> Add to Cart
                 </button>
