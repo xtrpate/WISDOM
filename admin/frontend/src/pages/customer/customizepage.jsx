@@ -69,7 +69,10 @@ const ProductImage = ({ src, alt }) => {
 
 /* ── Skeleton ── */
 const Skeleton = () => (
-  <div className="product-skeleton">
+  <div
+    className="product-skeleton"
+    style={{ maxWidth: "320px", width: "100%" }}
+  >
     <div className="skeleton-img" />
     <div className="skeleton-body">
       <div className="skeleton-line short" />
@@ -337,7 +340,7 @@ export default function CustomizePage() {
 
   useEffect(() => {
     fetchProducts();
-  }, []);
+  }, [fetchProducts]);
 
   const handleSearch = (e) => {
     e.preventDefault();
@@ -413,11 +416,19 @@ export default function CustomizePage() {
         )}
       </div>
 
-      {/* Grid */}
+      {/* Grid with strict column rules to prevent stretching! */}
       <div className="cust-grid-wrap">
         {loading ? (
-          <div className="products-grid">
-            {Array.from({ length: 6 }).map((_, i) => (
+          <div
+            className="products-grid"
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+              gap: "24px",
+              alignItems: "start",
+            }}
+          >
+            {Array.from({ length: 4 }).map((_, i) => (
               <Skeleton key={i} />
             ))}
           </div>
@@ -428,9 +439,21 @@ export default function CustomizePage() {
             <p>Try a different search term.</p>
           </div>
         ) : (
-          <div className="products-grid">
+          <div
+            className="products-grid"
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+              gap: "24px",
+              alignItems: "start",
+            }}
+          >
             {products.map((p) => (
-              <div key={p.id} className="product-card">
+              <div
+                key={p.id}
+                className="product-card"
+                style={{ maxWidth: "320px", width: "100%", margin: "0 auto" }} // Forces it to stay a normal card shape!
+              >
                 <div
                   className="product-card-img"
                   style={{ cursor: "pointer" }}

@@ -32,13 +32,22 @@ const upload = multer({
    CUSTOMER ORDERS ROUTES
 ══════════════════════════════════════════════════════════════ */
 
-// NOTE: /settings must come before /:id so Express doesn't treat 'settings' as an ID
+// NOTE: /settings and /verify-payment must come before /:id
 router.get(
   "/settings",
   authenticate,
   requireCustomer,
   orderController.getSettings,
 );
+
+// 👉 NEW: Route to catch the PayMongo Redirect Success
+router.post(
+  "/verify-payment",
+  authenticate,
+  requireCustomer,
+  orderController.verifyPayment,
+);
+
 router.post(
   "/",
   authenticate,
@@ -46,6 +55,7 @@ router.post(
   upload.single("proof"),
   orderController.createOrder,
 );
+
 router.get("/", authenticate, requireCustomer, orderController.getOrders);
 router.get("/:id", authenticate, requireCustomer, orderController.getOrderById);
 router.put(
@@ -53,6 +63,12 @@ router.put(
   authenticate,
   requireCustomer,
   orderController.confirmOrder,
+);
+router.put(
+  "/:id/cancel",
+  authenticate,
+  requireCustomer,
+  orderController.cancelOrder,
 );
 
 module.exports = router;

@@ -19,7 +19,13 @@ const PORT = process.env.PORT || 5000;
 app.set("trust proxy", 1);
 
 // ── Security ──────────────────────────────────────────────────────────────────
-app.use(helmet());
+// 👉 FIX 1: Updated Helmet to allow images to load on the frontend
+app.use(
+  helmet({
+    crossOriginResourcePolicy: false,
+  }),
+);
+
 app.use(
   cors({
     origin: [
@@ -51,6 +57,9 @@ app.use("/backups", express.static(path.join(__dirname, "backups")));
 
 // ── Unified API Routes ────────────────────────────────────────────────────────
 
+// 👉 FIX 2: Added Public Routes for Home & FAQ pages (No login required)
+app.use("/api/public", require("./routes/public"));
+
 // 1. Admin Routes (Mounted at /api directly to preserve existing frontend calls)
 app.use("/api", adminRoutes);
 
@@ -79,6 +88,7 @@ app.use("/api/pos/tasks", require("./routes/pos.tasks"));
 app.use("/api/pos", require("./routes/pos.fulfillment"));
 app.use("/api/pos", require("./routes/pos.schedule"));
 app.use("/api/pos", require("./routes/pos.receipts"));
+app.use("/api/pos/reports", require("./routes/pos.reports")); // Updated to match our new reports setup
 
 // ── Health Check ──────────────────────────────────────────────────────────────
 app.get("/health", async (req, res) => {

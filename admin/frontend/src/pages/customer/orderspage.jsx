@@ -1,6 +1,7 @@
 /**
  * pages/orderspage.jsx
  * Customer — My Orders with full tracking timeline
+ * Includes auto-verification for PayMongo redirects
  */
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
@@ -48,6 +49,7 @@ const PAY_METHOD_LABELS = {
   cop: "Cash on Pick-up",
   gcash: "GCash",
   bank_transfer: "Bank Transfer",
+  paymongo: "Online (PayMongo)", // 👉 Added PayMongo label just in case!
   cash: "Cash",
 };
 
@@ -467,8 +469,37 @@ export default function OrdersPage() {
       .finally(() => setLoading(false));
   };
 
+  // 👉 NEW: The Smart PayMongo Loader
   useEffect(() => {
-    fetchOrders();
+    const searchParams = new URLSearchParams(window.location.search);
+    const verifySuccess = searchParams.get("verify_success");
+    const orderNumber = searchParams.get("order");
+
+    if (verifySuccess === "true" && orderNumber) {
+      setLoading(true);
+
+      // Secretly tell the backend to update the database
+      axios
+        .post("/api/customer/orders/verify-payment", {
+          order_number: orderNumber,
+        })
+        .then(() => {
+          // Clean up the URL so it looks normal again
+          window.history.replaceState(
+            {},
+            document.title,
+            window.location.pathname,
+          );
+        })
+        .catch((err) => console.error("Verification error:", err))
+        .finally(() => {
+          // Load the updated orders list with green badges!
+          fetchOrders();
+        });
+    } else {
+      // Normal page load
+      fetchOrders();
+    }
   }, []);
 
   const handleConfirmOrder = async (e, orderId) => {
@@ -491,6 +522,20 @@ export default function OrdersPage() {
     e.stopPropagation(); // Prevent the modal from opening
     alert("Review feature coming soon!"); // Replace with your review logic later
   };
+  const handleCancelOrder = async (e, orderId) => {
+    e.stopPropagation(); // Prevent the modal from opening
+    const reason = window.prompt("Please provide a reason for cancellation:");
+
+    if (reason !== null) {
+      try {
+        await axios.put(`/api/customer/orders/${orderId}/cancel`, { reason });
+        fetchOrders(); // Refresh to move it to the 'Cancelled' tab
+        alert("Order has been cancelled.");
+      } catch (error) {
+        alert("Failed to cancel the order. Please try again.");
+      }
+    }
+  };
 
   const STATUS_TABS = [
     { key: "all", label: "All Orders" },
@@ -500,6 +545,7 @@ export default function OrdersPage() {
     { key: "shipping", label: "Shipping" },
     { key: "delivered", label: "Delivered" },
     { key: "completed", label: "Completed" },
+    { key: "cancelled", label: "Cancelled" },
   ];
 
   const filtered =
@@ -650,39 +696,65 @@ export default function OrdersPage() {
                   <span className="order-card-total">{fmt(order.total)}</span>
 
                   {/* Dynamic Footer Actions Based on Status */}
-                  {order.status === "delivered" ? (
-                    <div style={{ display: "flex", gap: "10px" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "10px",
+                      alignItems: "center",
+                    }}
+                  >
+                    {/* Show Cancel button ONLY if pending */}
+                    {order.status === "pending" && (
                       <button
                         style={{
                           background: "transparent",
-                          border: "1px solid #ccc",
+                          color: "#d32f2f",
+                          border: "1px solid #d32f2f",
                           padding: "6px 16px",
                           borderRadius: "4px",
                           cursor: "pointer",
                           fontWeight: 500,
                         }}
-                        onClick={(e) => handleReviewOrder(e, order.id)}
+                        onClick={(e) => handleCancelOrder(e, order.id)}
                       >
-                        Review
+                        Cancel Order
                       </button>
-                      <button
-                        style={{
-                          background: "#c1602a", // Colored to stand out
-                          color: "#fff",
-                          border: "none",
-                          padding: "6px 16px",
-                          borderRadius: "4px",
-                          cursor: "pointer",
-                          fontWeight: 500,
-                        }}
-                        onClick={(e) => handleConfirmOrder(e, order.id)}
-                      >
-                        Confirm
-                      </button>
-                    </div>
-                  ) : (
-                    <span className="order-card-view">Track Order →</span>
-                  )}
+                    )}
+
+                    {order.status === "delivered" ? (
+                      <>
+                        <button
+                          style={{
+                            background: "transparent",
+                            border: "1px solid #ccc",
+                            padding: "6px 16px",
+                            borderRadius: "4px",
+                            cursor: "pointer",
+                            fontWeight: 500,
+                          }}
+                          onClick={(e) => handleReviewOrder(e, order.id)}
+                        >
+                          Review
+                        </button>
+                        <button
+                          style={{
+                            background: "#c1602a",
+                            color: "#fff",
+                            border: "none",
+                            padding: "6px 16px",
+                            borderRadius: "4px",
+                            cursor: "pointer",
+                            fontWeight: 500,
+                          }}
+                          onClick={(e) => handleConfirmOrder(e, order.id)}
+                        >
+                          Confirm
+                        </button>
+                      </>
+                    ) : (
+                      <span className="order-card-view">Track Order →</span>
+                    )}
+                  </div>
                 </div>
               </div>
             );

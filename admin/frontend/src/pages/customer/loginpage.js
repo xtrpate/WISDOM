@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { useNavigate, Link, useLocation } from "react-router-dom";
-import { useAuth } from "./authcontext";
 import useAuthStore from "../../store/authStore";
 import axios from "axios";
 
@@ -8,7 +7,6 @@ import { Mail, Lock, Eye, EyeOff } from "lucide-react";
 import "./authpages.css";
 
 export default function LoginPage() {
-  const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 

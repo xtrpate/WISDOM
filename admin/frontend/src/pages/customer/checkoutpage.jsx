@@ -1,7 +1,7 @@
 /**
  * pages/checkoutpage.jsx
  * Full checkout: delivery info, payment method selection,
- * proof of payment upload, order placement
+ * PayMongo redirect integration, order placement
  */
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
@@ -11,6 +11,7 @@ import { CheckCircle } from "lucide-react";
 import "./cart.css";
 import useAuthStore from "../../store/authStore";
 
+// 👉 UPDATED: Replaced manual GCash with a seamless PayMongo option
 const PAYMENT_METHODS = [
   {
     value: "cod",
@@ -27,15 +28,15 @@ const PAYMENT_METHODS = [
     needsProof: false,
   },
   {
-    value: "gcash",
-    label: "GCash",
-    desc: "Send payment via GCash",
-    icon: "📱",
-    needsProof: true,
+    value: "paymongo",
+    label: "Online Payment (PayMongo)",
+    desc: "GCash, Maya, Credit/Debit Cards",
+    icon: "💳",
+    needsProof: false, // No screenshot needed, PayMongo verifies it automatically!
   },
   {
     value: "bank_transfer",
-    label: "Bank Transfer",
+    label: "Manual Bank Transfer",
     desc: "Transfer to our bank account",
     icon: "🏦",
     needsProof: true,
@@ -90,7 +91,7 @@ export default function CheckoutPage() {
       .catch(() => {});
   }, []);
 
-  /* Auto-redirect to /orders after success */
+  /* Auto-redirect to /orders after success (For Offline Payments) */
   useEffect(() => {
     if (!success) return;
     if (redirectCountdown <= 0) {
@@ -161,6 +162,15 @@ export default function CheckoutPage() {
       } else {
         clearCart();
       }
+
+      // 👉 UPDATED: PayMongo Redirect Logic
+      // If the backend returns a PayMongo URL, redirect the user immediately!
+      if (res.data.payment_url) {
+        window.location.href = res.data.payment_url;
+        return; // Stop execution here so we don't show the success screen yet
+      }
+
+      // If it's COD, COP, or Manual Bank Transfer, show standard success screen
       setSuccess(res.data);
     } catch (err) {
       setError(
@@ -431,22 +441,21 @@ export default function CheckoutPage() {
                 ))}
               </div>
 
-              {form.payment_method === "gcash" && (
+              {/* 👉 UPDATED: PayMongo UI Explainer */}
+              {form.payment_method === "paymongo" && (
                 <div className="payment-info-box">
-                  <h4>📱 GCash Payment Details</h4>
-                  <div className="payment-info-row">
-                    <span>GCash Number</span>
-                    <span>
-                      {settings.gcash_number || "Contact admin for details"}
-                    </span>
-                  </div>
-                  <div className="payment-info-row">
-                    <span>Account Name</span>
-                    <span>Spiral Wood Services</span>
-                  </div>
-                  <p style={{ fontSize: 12, color: "#888", marginTop: 8 }}>
-                    Please send the exact amount and upload your screenshot
-                    below.
+                  <h4>💳 Secure Online Payment</h4>
+                  <p
+                    style={{
+                      fontSize: 13,
+                      color: "#555",
+                      marginTop: 8,
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    After clicking "Place Order", you will be securely
+                    redirected to PayMongo to complete your payment. You can use
+                    GCash, Maya, or any Credit/Debit Card.
                   </p>
                 </div>
               )}
@@ -473,7 +482,7 @@ export default function CheckoutPage() {
             </div>
           </div>
 
-          {/* Section 3: Proof of Payment */}
+          {/* Section 3: Proof of Payment (Hides dynamically for PayMongo) */}
           {needsProof && (
             <div className="checkout-section">
               <div className="checkout-section-header">
@@ -617,7 +626,11 @@ export default function CheckoutPage() {
             disabled={loading || !form.payment_method}
           >
             <CheckCircle size={16} />
-            {loading ? "Placing Order…" : "Place Order"}
+            {loading
+              ? "Processing..."
+              : form.payment_method === "paymongo"
+                ? "Proceed to PayMongo"
+                : "Place Order"}
           </button>
         </div>
       </div>

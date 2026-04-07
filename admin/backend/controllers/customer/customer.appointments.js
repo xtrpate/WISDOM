@@ -97,6 +97,8 @@ exports.createAppointment = async (req, res) => {
       });
     }
 
+    // FIXED: Removed provider_id and request_owner_id.
+    // We only insert what we know exists in the schema.
     const [result] = await db.execute(
       `
       INSERT INTO appointments
@@ -104,8 +106,6 @@ exports.createAppointment = async (req, res) => {
           order_id,
           customer_id,
           handled_by,
-          provider_id,
-          request_owner_id,
           purpose,
           scheduled_date,
           preferred_date,
@@ -113,7 +113,7 @@ exports.createAppointment = async (req, res) => {
           notes
         )
       VALUES
-        (NULL, ?, NULL, NULL, NULL, ?, ?, ?, 'pending', ?)
+        (NULL, ?, NULL, ?, ?, ?, 'pending', ?)
       `,
       [req.user.id, purpose, scheduled_date, preferred_schedule, fullNotes],
     );
@@ -134,6 +134,8 @@ exports.createAppointment = async (req, res) => {
 /* ── Get Appointments ── */
 exports.getAppointments = async (req, res) => {
   try {
+    // FIXED: Query based directly on a.customer_id instead of joining orders.
+    // Changed a.assigned_to to a.handled_by based on standard schema.
     const [rows] = await db.execute(
       `
       SELECT
@@ -148,9 +150,9 @@ exports.getAppointments = async (req, res) => {
         u.name AS assigned_to_name,
         o.order_number
       FROM appointments a
-      LEFT JOIN users u ON u.id = a.assigned_to
+      LEFT JOIN users u ON u.id = a.handled_by
       LEFT JOIN orders o ON o.id = a.order_id
-      WHERE o.customer_id = ?
+      WHERE a.customer_id = ?
       ORDER BY a.updated_at DESC, a.id DESC
       `,
       [req.user.id],

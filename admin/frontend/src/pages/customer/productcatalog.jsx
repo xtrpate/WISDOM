@@ -334,7 +334,6 @@ export default function ProductCatalog() {
           </p>
         </div>
       </div>
-      
 
       <div className="catalog-layout">
         {/* ── Sidebar ── */}
@@ -494,11 +493,7 @@ export default function ProductCatalog() {
           )}
 
           <div className="product-grid">
-            {typeFilter === "blueprint" ? (
-              <div style={{ gridColumn: "1 / -1" }}>
-                <BlueprintGallery embedded />
-              </div>
-            ) : loading ? (
+            {loading ? (
               Array(8)
                 .fill(0)
                 .map((_, i) => <SkeletonCard key={i} />)

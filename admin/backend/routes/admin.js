@@ -100,8 +100,10 @@ router.post(
 // ══════════════════════════════════════════════════════════════════════════════
 // ORDERS
 // ══════════════════════════════════════════════════════════════════════════════
-router.get("/orders", adminStaff, orders.getAll);
 router.get("/orders/cancellations", adminOnly, orders.getCancellations);
+router.post("/orders/:id/cancellation", adminOnly, orders.processCancellation);
+
+router.get("/orders", adminStaff, orders.getAll);
 router.get("/orders/:id", adminStaff, orders.getOne);
 router.patch("/orders/:id/status", adminOnly, orders.updateStatus);
 router.post("/orders/:id/accept", adminOnly, orders.accept);

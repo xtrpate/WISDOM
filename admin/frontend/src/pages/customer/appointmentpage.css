@@ -388,11 +388,39 @@
   margin: 0;
 }
 
+/* 👉 NEW: Hover-to-scroll logic applied directly to appt-list */
 .appt-list {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  max-height: 400px;
+  overflow-y: auto;
+  padding-right: 6px;
 }
+
+/* Scrollbar remains invisible by default */
+.appt-list::-webkit-scrollbar {
+  width: 6px;
+}
+.appt-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+.appt-list::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border-radius: 10px;
+  transition: background-color 0.2s ease;
+}
+
+/* Scrollbar thumb appears when mouse hovers over the list */
+.appt-list:hover::-webkit-scrollbar-thumb {
+  background-color: #e8e0d8;
+}
+
+/* Scrollbar thumb darkens slightly when directly interacting with it */
+.appt-list::-webkit-scrollbar-thumb:hover {
+  background-color: #d2691e;
+}
+
 .appt-item {
   background: #faf7f4;
   border-radius: 10px;

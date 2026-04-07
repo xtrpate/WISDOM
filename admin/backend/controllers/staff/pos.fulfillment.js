@@ -85,6 +85,35 @@ const getAppointmentById = async (appointmentId) => {
    DELIVERIES LOGIC
 ══════════════════════════════════════════════════════════════ */
 
+// 👉 NEW: This is the missing function the frontend is asking for!
+exports.getDeliverableOrders = async (req, res) => {
+  try {
+    const [orders] = await db.query(`
+      SELECT 
+        o.id,
+        o.order_number,
+        o.created_at,
+        COALESCE(c.name, o.walkin_customer_name, 'Walk-in Customer') AS customer_name,
+        COALESCE(c.phone, o.walkin_customer_phone, 'No phone provided') AS customer_phone,
+        COALESCE(o.address, c.address, 'No address provided') AS delivery_address,
+        o.total,
+        o.status AS order_status,
+        o.delivery_status,
+        o.payment_method
+      FROM orders o
+      LEFT JOIN users c ON o.customer_id = c.id
+      WHERE o.status != 'cancelled' 
+        AND (o.delivery_status IS NULL OR o.delivery_status IN ('pending', 'scheduled', 'in_transit'))
+      ORDER BY o.created_at ASC
+    `);
+
+    res.json(orders);
+  } catch (err) {
+    console.error("GET /api/pos/deliverable-orders error:", err);
+    res.status(500).json({ message: "Failed to fetch deliverable orders" });
+  }
+};
+
 exports.getDeliveries = async (req, res) => {
   try {
     const [rows] = await db.query(`

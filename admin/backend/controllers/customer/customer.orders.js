@@ -1,5 +1,6 @@
 // controllers/customer/customer.orders.js
 const db = require("../../config/db"); // Uses the unified db config
+const axios = require("axios");
 
 /* ── Get Settings (Payment Info) ── */
 exports.getSettings = async (req, res) => {
@@ -135,6 +136,72 @@ exports.createOrder = async (req, res) => {
 
     await conn.commit();
 
+    if (payment_method === "paymongo") {
+      try {
+        const amountInCents = Math.round(parseFloat(total) * 100);
+        const base64Auth = Buffer.from(
+          process.env.PAYMONGO_SECRET_KEY,
+        ).toString("base64");
+
+        const paymongoPayload = {
+          data: {
+            attributes: {
+              billing: {
+                name: name,
+                phone: phone,
+              },
+              send_email_receipt: false,
+              show_description: true,
+              show_line_items: true,
+              description: `Order ${order_number} - Spiral Wood`,
+              payment_method_types: ["card", "gcash", "paymaya"],
+              line_items: [
+                {
+                  currency: "PHP",
+                  amount: amountInCents,
+                  name: `Order ${order_number}`,
+                  quantity: 1,
+                },
+              ],
+              success_url: `http://localhost:3000/orders?verify_success=true&order=${order_number}`,
+              cancel_url: "http://localhost:3000/cart",
+            },
+          },
+        };
+
+        const paymongoRes = await axios.post(
+          "https://api.paymongo.com/v1/checkout_sessions",
+          paymongoPayload,
+          {
+            headers: {
+              accept: "application/json",
+              "content-type": "application/json",
+              authorization: `Basic ${base64Auth}`,
+            },
+          },
+        );
+
+        return res.status(201).json({
+          message: "Order placed. Redirecting to payment...",
+          order_id,
+          order_number,
+          payment_url: paymongoRes.data.data.attributes.checkout_url,
+        });
+      } catch (paymongoError) {
+        console.error(
+          "PayMongo Error:",
+          paymongoError.response?.data || paymongoError.message,
+        );
+        return res.status(201).json({
+          message: "Order placed, but payment link generation failed.",
+          order_id,
+          order_number,
+          total: parseFloat(total),
+          payment_status,
+        });
+      }
+    }
+
     res.status(201).json({
       message: "Order placed successfully.",
       order_id,
@@ -143,7 +210,7 @@ exports.createOrder = async (req, res) => {
       payment_status,
     });
   } catch (err) {
-    await conn.rollback();
+    if (!conn.connection._fatalError) await conn.rollback();
     console.error("[customer.orders POST]", err);
     res.status(500).json({ message: "Server error.", error: err.message });
   } finally {
@@ -231,5 +298,117 @@ exports.confirmOrder = async (req, res) => {
   } catch (err) {
     console.error("[customer.orders/:id/confirm]", err);
     res.status(500).json({ message: "Server error.", error: err.message });
+  }
+};
+
+/* ── Verify PayMongo Redirect ── */
+exports.verifyPayment = async (req, res) => {
+  try {
+    const { order_number } = req.body;
+
+    if (!order_number) {
+      return res.status(400).json({ message: "Order number is required." });
+    }
+
+    const [result] = await db.execute(
+      `UPDATE orders 
+       SET payment_status = 'paid', status = 'confirmed' 
+       WHERE order_number = ? AND customer_id = ?`,
+      [order_number, req.user.id],
+    );
+
+    if (result.affectedRows === 0) {
+      return res
+        .status(404)
+        .json({ message: "Order not found or unauthorized." });
+    }
+
+    res.json({ success: true, message: "Payment verified and order updated." });
+  } catch (err) {
+    console.error("[customer.orders verifyPayment]", err);
+    res.status(500).json({ message: "Server error.", error: err.message });
+  }
+};
+
+/* ── Customer Cancels Order ── */
+exports.cancelOrder = async (req, res) => {
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    const { reason } = req.body;
+    const orderId = req.params.id;
+    const customerId = req.user.id;
+
+    // 1. Update the order ONLY if it is still 'pending'
+    const [updateResult] = await conn.execute(
+      `UPDATE orders
+       SET status = 'cancelled',
+           notes = CONCAT(IFNULL(notes, ''), '\nCancellation Reason: ', ?)
+       WHERE id = ? AND customer_id = ? AND status = 'pending'`,
+      [reason || "Cancelled by customer", orderId, customerId],
+    );
+
+    if (updateResult.affectedRows === 0) {
+      await conn.rollback();
+      return res.status(400).json({
+        message:
+          "Order could not be cancelled. It may not exist or is no longer pending.",
+      });
+    }
+
+    // 👉 NEW: 2. Insert the cancellation request so Admin can see it
+    await conn.execute(
+      `INSERT INTO cancellations (order_id, requested_by, reason, created_at)
+       VALUES (?, ?, ?, NOW())`,
+      [orderId, customerId, reason || "Cancelled by customer"],
+    );
+
+    // 3. Fetch all items associated with this cancelled order
+    const [items] = await conn.execute(
+      `SELECT product_id, variation_id, quantity 
+       FROM order_items 
+       WHERE order_id = ?`,
+      [orderId],
+    );
+
+    // 4. Return the stock for each item
+    for (const item of items) {
+      if (item.variation_id) {
+        await conn.execute(
+          `UPDATE product_variations
+           SET stock = stock + ?
+           WHERE id = ?`,
+          [item.quantity, item.variation_id],
+        );
+      } else {
+        await conn.execute(
+          `UPDATE products
+           SET stock = stock + ?
+           WHERE id = ?`,
+          [item.quantity, item.product_id],
+        );
+      }
+
+      await conn.execute(
+        `UPDATE products
+         SET stock_status = CASE
+           WHEN stock <= 0              THEN 'out_of_stock'
+           WHEN stock <= reorder_point  THEN 'low_stock'
+           ELSE 'in_stock'
+         END
+         WHERE id = ?`,
+        [item.product_id],
+      );
+    }
+
+    await conn.commit();
+    res.json({ message: "Order cancelled and submitted for admin review." });
+  } catch (err) {
+    if (!conn.connection._fatalError) await conn.rollback();
+    console.error("[customer.orders/:id/cancel]", err);
+    res.status(500).json({ message: "Server error.", error: err.message });
+  } finally {
+    conn.release();
   }
 };

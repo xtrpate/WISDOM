@@ -65,6 +65,7 @@ import { CustomCartProvider } from "./pages/customer/customcartcontext";
 import CustomerLayout from "./pages/customer/customerlayout.jsx";
 import CustomerLoginPage from "./pages/customer/loginpage";
 import RegisterPage from "./pages/customer/registerpage";
+import ForgotPasswordPage from "./pages/customer/forgotpasswordpage";
 import ProductCatalog from "./pages/customer/productcatalog";
 import CartPage from "./pages/customer/cartpage";
 import CheckoutPage from "./pages/customer/checkoutpage";
@@ -90,6 +91,16 @@ import POSReceiptPage from "./pages/staff/ReceiptPage";
 import POSSalesReports from "./pages/staff/SalesReports";
 import POSBlueprintView from "./pages/staff/BlueprintView";
 import POSInventoryLookup from "./pages/staff/InventoryLookup";
+
+window.addEventListener("error", (e) => {
+  if (
+    e.message === "ResizeObserver loop limit exceeded" ||
+    e.message ===
+      "ResizeObserver loop completed with undelivered notifications."
+  ) {
+    e.stopImmediatePropagation();
+  }
+});
 
 axios.interceptors.request.use((config) => {
   const token =
@@ -122,6 +133,7 @@ export default function App() {
             {/* Standalone Pages (No Navbar) */}
             <Route path="login" element={<CustomerLoginPage />} />
             <Route path="register" element={<RegisterPage />} />
+            <Route path="forgot-password" element={<ForgotPasswordPage />} />
 
             {/* Pages with Navbar */}
             <Route
@@ -282,10 +294,7 @@ export default function App() {
           </Route>
 
           {/* Catch-all */}
-          <Route
-            path="*"
-            element={<Navigate to="/admin/dashboard" replace />}
-          />
+          <Route path="*" element={<Navigate to="/catalog" replace />} />
         </Routes>
       </BrowserRouter>
     </ErrorBoundary>

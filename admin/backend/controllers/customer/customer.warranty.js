@@ -1,5 +1,5 @@
 // controllers/customer/customer.warranty.js
-const db = require("../../config/db"); // Uses the unified db config
+const db = require("../../config/db");
 
 /* ── Get Completed Orders (For Dropdown) ── */
 exports.getEligibleOrders = async (req, res) => {
@@ -21,10 +21,11 @@ exports.getEligibleOrders = async (req, res) => {
 /* ── List My Warranty Claims ── */
 exports.getClaims = async (req, res) => {
   try {
+    // Updated to use your 'warranties' table and map 'reason' to 'description' for the frontend
     const [rows] = await db.execute(
-      `SELECT id, order_number, product_name, description,
-              photo_url, proof_url, status, admin_notes, created_at
-       FROM warranty_claims
+      `SELECT id, order_id, product_name, reason AS description,
+              proof_url, status, created_at
+       FROM warranties
        WHERE customer_id = ?
        ORDER BY created_at DESC`,
       [req.user.id],
@@ -38,7 +39,7 @@ exports.getClaims = async (req, res) => {
 
 /* ── Submit a Warranty Claim ── */
 exports.submitClaim = async (req, res) => {
-  const { order_id, order_number, product_name, description } = req.body;
+  const { order_id, product_name, description } = req.body;
 
   if (!product_name?.trim() || !description?.trim()) {
     return res.status(400).json({
@@ -53,20 +54,22 @@ exports.submitClaim = async (req, res) => {
     ? `uploads/warranty/${req.files.proof[0].filename}`
     : null;
 
+  // Since your database only has a single 'proof_url' column,
+  // we combine both uploaded images into a comma-separated string.
+  const combinedUrls = [photo_url, proof_url].filter(Boolean).join(",") || null;
+
   try {
+    // Updated to match your exact phpMyAdmin schema
     const [result] = await db.execute(
-      `INSERT INTO warranty_claims
-         (customer_id, order_id, order_number, product_name,
-          description, photo_url, proof_url, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')`,
+      `INSERT INTO warranties
+         (customer_id, order_id, product_name, reason, proof_url, status)
+       VALUES (?, ?, ?, ?, ?, 'pending')`,
       [
         req.user.id,
         order_id || null,
-        order_number?.trim() || null,
         product_name.trim(),
-        description.trim(),
-        photo_url,
-        proof_url,
+        description.trim(), // This maps the frontend description to your 'reason' column
+        combinedUrls,
       ],
     );
 

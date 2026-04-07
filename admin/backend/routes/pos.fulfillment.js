@@ -9,6 +9,13 @@ const posAccess = [authenticate, requireStaffOrAdmin];
 /* ══════════════════════════════════════════════════════════════
    STAFF/POS DELIVERIES
 ══════════════════════════════════════════════════════════════ */
+// 👉 NEW: Added this route so the Delivery Scheduling page works!
+router.get(
+  "/deliverable-orders",
+  posAccess,
+  posFulfillmentController.getDeliverableOrders,
+);
+
 router.get("/deliveries", posAccess, posFulfillmentController.getDeliveries);
 router.post("/deliveries", posAccess, posFulfillmentController.createDelivery);
 router.patch(
