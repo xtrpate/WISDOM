@@ -243,12 +243,12 @@ exports.register = async (req, res) => {
           is_active
         )
       VALUES
-        (?, ?, ?, ?, ?, 'customer', FALSE, ?, ?, 'approved', TRUE)
+        (?, ?, ?, ?, ?, 'customer', TRUE, ?, ?, 'approved', TRUE)
       `,
       [fullName, normalizedEmail, hashed, phone, address, otp, expiry],
     );
 
-    await sendOtpEmail(normalizedEmail, otp, String(first_name).trim());
+    // await sendOtpEmail(normalizedEmail, otp, String(first_name).trim());
 
     return res.status(201).json({
       message:
