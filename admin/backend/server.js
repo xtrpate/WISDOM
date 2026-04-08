@@ -66,6 +66,7 @@ app.use("/api", adminRoutes);
 // 2. Customer Routes
 app.use("/api/customer/auth", require("./routes/customer.auth"));
 app.use("/api/customer/products", require("./routes/customer.products"));
+app.use("/api/customer/cart", require("./routes/customer.cart"));
 app.use("/api/customer/orders", require("./routes/customer.orders"));
 app.use("/api/customer/profile", require("./routes/customer.profile"));
 app.use("/api/customer/blueprints", require("./routes/customer.blueprints"));

@@ -550,6 +550,20 @@ function Canvas2D({
     return [];
   }, [selectedComponents, allComponents]);
 
+  const effectiveBounds3D = useMemo(() => {
+    if (selectedBounds3D) return selectedBounds3D;
+    return getComponentsBounds3D(previewComponents);
+  }, [selectedBounds3D, previewComponents]);
+
+  const focusLabelText = useMemo(() => {
+    if (selectedLabel) return selectedLabel;
+    return (
+      previewComponents[0]?.groupLabel ||
+      previewComponents[0]?.label ||
+      "Full Blueprint Layout"
+    );
+  }, [selectedLabel, previewComponents]);
+
   const referenceType = String(
     referenceFile?.type || referenceFile?.file_type || "",
   ).toLowerCase();
@@ -682,8 +696,8 @@ function Canvas2D({
 
   const verticalDimText =
     view === "top"
-      ? formatDim(selectedBounds3D?.depth || 0, unit)
-      : formatDim(selectedBounds3D?.height || 0, unit);
+      ? formatDim(effectiveBounds3D?.depth || 0, unit)
+      : formatDim(effectiveBounds3D?.height || 0, unit);
 
   return (
     <Stage
@@ -740,9 +754,7 @@ function Canvas2D({
         <Text
           x={PAPER_MARGIN + 12}
           y={PAPER_MARGIN + 28}
-          text={
-            selectedLabel ? selectedLabel.toUpperCase() : "NO SELECTED OBJECT"
-          }
+          text={String(focusLabelText || "Full Blueprint Layout").toUpperCase()}
           fontSize={10}
           fill="#475569"
           listening={false}
@@ -876,10 +888,10 @@ function Canvas2D({
           );
         })}
 
-        {selectedComp &&
-          view !== "exploded" &&
+        {view !== "exploded" &&
           overallScreenBounds &&
-          selectedBounds3D && (
+          effectiveBounds3D &&
+          scaledItems.length > 0 && (
             <>
               <DimensionLine
                 x1={overallScreenBounds.minX}
@@ -889,8 +901,8 @@ function Canvas2D({
                 offset={24}
                 text={
                   view === "left" || view === "right"
-                    ? formatDim(selectedBounds3D.depth, unit)
-                    : formatDim(selectedBounds3D.width, unit)
+                    ? formatDim(effectiveBounds3D.depth, unit)
+                    : formatDim(effectiveBounds3D.width, unit)
                 }
                 orientation="horizontal"
               />
@@ -943,7 +955,7 @@ function Canvas2D({
               <Text
                 x={drawingArea.x + 8}
                 y={drawingArea.y + drawingArea.h - 24}
-                text={`SELECTED: ${selectedComp.partCode || selectedComp.label}`}
+                text={`OBJECT: ${focusLabelText}`}
                 fontSize={10}
                 fill="#475569"
                 listening={false}
@@ -969,7 +981,7 @@ function Canvas2D({
             </>
           )}
 
-        {selectedComp && view === "exploded" && (
+        {scaledItems.length > 0 && view === "exploded" && (
           <>
             <Text
               x={drawingArea.x + 8}
@@ -1051,7 +1063,7 @@ function Canvas2D({
           canvasW={canvasW}
           canvasH={canvasH}
           blueprintTitle={blueprintTitle}
-          objectLabel={selectedLabel}
+          objectLabel={focusLabelText}
           viewLabel={viewLabel}
           materialText={selectedMaterialText}
           dimsText={selectedDimsText}
