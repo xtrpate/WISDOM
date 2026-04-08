@@ -307,7 +307,7 @@ export default function CheckoutPage() {
                   <div className="checkout-item-thumb">
                     {item.image_url ? (
                       <img
-                        src={`http://localhost:5000/${item.image_url}`}
+                        src={`https://wisdom-ov31.onrender.com/${item.image_url}`}
                         alt={item.product_name}
                         style={{
                           width: "100%",

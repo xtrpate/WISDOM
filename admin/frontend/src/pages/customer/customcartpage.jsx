@@ -7,7 +7,7 @@ import { Scissors, Trash2, ShoppingBag, ArrowRight } from "lucide-react";
 import { useCustomCart } from "./customcartcontext";
 import "./customizepage.css";
 
-const API = "http://localhost:5000";
+const API = "https://wisdom-ov31.onrender.com";
 
 export default function CustomCartPage() {
   const navigate = useNavigate();

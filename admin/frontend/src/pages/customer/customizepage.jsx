@@ -8,7 +8,7 @@ import { Search, Scissors, ShoppingBag } from "lucide-react";
 import { useCustomCart } from "./customcartcontext";
 import "./customizepage.css";
 
-const API = "http://localhost:5000";
+const API = "https://wisdom-ov31.onrender.com";
 
 const WOOD_TYPES = [
   "Oak",

@@ -4,7 +4,7 @@ import axios from "axios";
 // IMPORTANT:
 // Since your requests already use /api/...,
 // keep baseURL as host only, NOT host + /api
-axios.defaults.baseURL = "http://localhost:5000";
+axios.defaults.baseURL = "https://wisdom-ov31.onrender.com";
 
 const LOGIN_PATH = "/staff/login";
 const SESSION_EXPIRED_MESSAGE = "Session expired. Please log in again.";

@@ -9,7 +9,7 @@ import "./productcatalog.css";
 import BlueprintGallery from "./blueprintgallery";
 import { useCart } from "./cartcontext"; // 👉 NEW: Import the official cart brain!
 
-const API = "http://localhost:5000";
+const API = "https://wisdom-ov31.onrender.com";
 
 /* ── Image component with fallback ── */
 const ProductImage = ({ src, alt, className, style }) => {

@@ -9,7 +9,7 @@ import { Search, ShoppingCart, Eye } from "lucide-react";
 import { useCart } from "./cartcontext";
 import "./blueprintgallery.css";
 
-const API = "http://localhost:5000";
+const API = "https://wisdom-ov31.onrender.com";
 
 /* ── Image with fallback ── */
 const BlueprintImage = ({ src, alt, className }) => {

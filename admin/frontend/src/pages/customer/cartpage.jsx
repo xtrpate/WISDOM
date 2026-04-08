@@ -142,7 +142,7 @@ export default function CartPage() {
                   <div className="cart-item-img">
                     {item.image_url ? (
                       <img
-                        src={`http://localhost:5000/${item.image_url}`}
+                        src={`https://wisdom-ov31.onrender.com/${item.image_url}`}
                         alt={item.product_name}
                         style={{
                           width: "100%",

@@ -19,7 +19,8 @@ import {
 } from "lucide-react";
 import useAuthStore from "../../store/authStore";
 
-const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
+const API_URL =
+  process.env.REACT_APP_API_URL || "https://wisdom-ov31.onrender.com/api";
 export default function Dashboard() {
   const { token } = useAuthStore();
   const [data, setData] = useState(null);

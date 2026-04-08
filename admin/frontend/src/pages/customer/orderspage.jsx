@@ -341,7 +341,7 @@ function OrderModal({ orderId, onClose }) {
                         <div className="om-item-img">
                           {item.image_url ? (
                             <img
-                              src={`http://localhost:5000/${item.image_url}`}
+                              src={`https://wisdom-ov31.onrender.com/${item.image_url}`}
                               alt={item.product_name}
                             />
                           ) : (
@@ -432,7 +432,7 @@ function OrderModal({ orderId, onClose }) {
                       🧾 Proof of Payment
                     </div>
                     <a
-                      href={`http://localhost:5000/${order.payment_proof}`}
+                      href={`https://wisdom-ov31.onrender.com/${order.payment_proof}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="om-proof-link"

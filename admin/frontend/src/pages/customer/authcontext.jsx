@@ -5,7 +5,7 @@
 import { createContext, useContext, useState, useEffect } from "react";
 import axios from "axios";
 
-axios.defaults.baseURL = "http://localhost:5000";
+axios.defaults.baseURL = "https://wisdom-ov31.onrender.com";
 
 const AuthContext = createContext(null);
 
